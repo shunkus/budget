@@ -9,16 +9,18 @@ interface SettingsModalProps {
 }
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { budgetData, updateDailyBudget, updateCurrentBudget } = useBudget();
+  const { budgetData, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate } = useBudget();
   const [dailyAmount, setDailyAmount] = useState('');
+  const [lastUpdate, setLastUpdate] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setDailyAmount(String(budgetData.dailyBudget));
+      setLastUpdate(budgetData.lastUpdateDate);
       setShowResetConfirm(false);
     }
-  }, [isOpen, budgetData.dailyBudget]);
+  }, [isOpen, budgetData.dailyBudget, budgetData.lastUpdateDate]);
 
   const handleReset = () => {
     updateCurrentBudget(budgetData.dailyBudget);
@@ -30,8 +32,11 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const amount = Number(dailyAmount);
     if (!isNaN(amount) && amount >= 0) {
       updateDailyBudget(amount);
-      onClose();
     }
+    if (lastUpdate && lastUpdate !== budgetData.lastUpdateDate) {
+      updateLastUpdateDate(lastUpdate);
+    }
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -55,6 +60,23 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           />
           <p className="text-sm text-gray-500 mt-1">
             This amount will be added to your budget every day.
+          </p>
+        </div>
+
+        {/* Last Update Date Section */}
+        <div className="mb-4">
+          <label htmlFor="lastUpdate" className="block text-sm font-medium text-gray-700 mb-2">
+            Last Update Date
+          </label>
+          <input
+            type="date"
+            id="lastUpdate"
+            value={lastUpdate}
+            onChange={(e) => setLastUpdate(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
+          />
+          <p className="text-sm text-gray-500 mt-1">
+            Daily budget is calculated from this date.
           </p>
         </div>
 

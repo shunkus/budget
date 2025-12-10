@@ -8,6 +8,7 @@ interface BudgetContextType {
   isLoading: boolean;
   updateDailyBudget: (amount: number) => void;
   updateCurrentBudget: (amount: number) => void;
+  updateLastUpdateDate: (date: string) => void;
   refreshBudget: () => void;
 }
 
@@ -43,9 +44,15 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     setBudgetData(newData);
   };
 
+  const updateLastUpdateDate = (date: string) => {
+    const newData = { ...budgetData, lastUpdateDate: date };
+    saveBudgetData({ lastUpdateDate: date });
+    setBudgetData(newData);
+  };
+
   return (
     <BudgetContext.Provider
-      value={{ budgetData, isLoading, updateDailyBudget, updateCurrentBudget, refreshBudget }}
+      value={{ budgetData, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, refreshBudget }}
     >
       {children}
     </BudgetContext.Provider>
