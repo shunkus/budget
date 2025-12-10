@@ -50,15 +50,20 @@ export function saveBudgetData(data: Partial<BudgetData>): void {
   }
 }
 
-// Date utility
+// Date utility - Japan timezone (JST, UTC+9)
 export function getTodayDateString(): string {
-  const today = new Date();
-  return today.toISOString().split('T')[0];
+  const now = new Date();
+  // Convert to Japan timezone
+  const jstOffset = 9 * 60; // JST is UTC+9
+  const utcMinutes = now.getTime() / (1000 * 60);
+  const jstDate = new Date((utcMinutes + jstOffset) * 60 * 1000);
+  return jstDate.toISOString().split('T')[0];
 }
 
 export function getDaysDifference(fromDate: string, toDate: string): number {
-  const from = new Date(fromDate);
-  const to = new Date(toDate);
+  // Parse dates as JST midnight
+  const from = new Date(fromDate + 'T00:00:00+09:00');
+  const to = new Date(toDate + 'T00:00:00+09:00');
   const diffTime = to.getTime() - from.getTime();
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;
