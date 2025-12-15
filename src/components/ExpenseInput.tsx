@@ -4,14 +4,14 @@ import { useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
 
 export default function ExpenseInput() {
-  const { budgetData, updateCurrentBudget } = useBudget();
+  const { addExpense } = useBudget();
   const [amount, setAmount] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const expenseAmount = Number(amount);
     if (!isNaN(expenseAmount) && expenseAmount > 0) {
-      updateCurrentBudget(budgetData.currentBudget - expenseAmount);
+      addExpense(expenseAmount);
       setAmount('');
     }
   };

@@ -1,14 +1,17 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { BudgetData, getBudgetData, saveBudgetData, calculateAndUpdateBudget } from '@/lib/storage';
+import { BudgetData, ExpenseRecord, getBudgetData, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord } from '@/lib/storage';
 
 interface BudgetContextType {
   budgetData: BudgetData;
+  expenseHistory: ExpenseRecord[];
   isLoading: boolean;
   updateDailyBudget: (amount: number) => void;
   updateCurrentBudget: (amount: number) => void;
   updateLastUpdateDate: (date: string) => void;
+  addExpense: (amount: number) => void;
+  removeExpense: (id: string, amount: number) => void;
   refreshBudget: () => void;
 }
 
@@ -20,11 +23,13 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     dailyBudget: 0,
     lastUpdateDate: '',
   });
+  const [expenseHistory, setExpenseHistory] = useState<ExpenseRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshBudget = useCallback(() => {
     const updatedData = calculateAndUpdateBudget();
     setBudgetData(updatedData);
+    setExpenseHistory(getExpenseHistory());
   }, []);
 
   useEffect(() => {
@@ -50,9 +55,31 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     setBudgetData(newData);
   };
 
+  const addExpense = (amount: number) => {
+    // Add to history
+    const record = addExpenseRecord(amount);
+    setExpenseHistory(prev => [...prev, record]);
+    // Deduct from budget
+    const newBudget = budgetData.currentBudget - amount;
+    const newData = { ...budgetData, currentBudget: newBudget };
+    saveBudgetData({ currentBudget: newBudget });
+    setBudgetData(newData);
+  };
+
+  const removeExpense = (id: string, amount: number) => {
+    // Remove from history
+    deleteExpenseRecord(id);
+    setExpenseHistory(prev => prev.filter(r => r.id !== id));
+    // Restore to budget
+    const newBudget = budgetData.currentBudget + amount;
+    const newData = { ...budgetData, currentBudget: newBudget };
+    saveBudgetData({ currentBudget: newBudget });
+    setBudgetData(newData);
+  };
+
   return (
     <BudgetContext.Provider
-      value={{ budgetData, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, refreshBudget }}
+      value={{ budgetData, expenseHistory, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, addExpense, removeExpense, refreshBudget }}
     >
       {children}
     </BudgetContext.Provider>
