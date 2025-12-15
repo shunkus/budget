@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -10,15 +11,18 @@ interface SettingsModalProps {
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { budgetData, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate } = useBudget();
+  const { logout } = useAuth();
   const [dailyAmount, setDailyAmount] = useState('');
   const [lastUpdate, setLastUpdate] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setDailyAmount(String(budgetData.dailyBudget));
       setLastUpdate(budgetData.lastUpdateDate);
       setShowResetConfirm(false);
+      setShowLogoutConfirm(false);
     }
   }, [isOpen, budgetData.dailyBudget, budgetData.lastUpdateDate]);
 
@@ -112,6 +116,37 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           <p className="text-sm text-gray-500 mt-1">
             This will reset your budget to today&apos;s daily amount (¥{budgetData.dailyBudget.toLocaleString()}).
           </p>
+        </div>
+
+        {/* Logout Section */}
+        <div className="mb-6 pt-4 border-t border-gray-200">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Account
+          </label>
+          {showLogoutConfirm ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Are you sure you want to logout?</span>
+              <button
+                onClick={logout}
+                className="px-3 py-1 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors"
+              >
+                Yes, Logout
+              </button>
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-3 py-1 text-gray-600 text-sm hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowLogoutConfirm(true)}
+              className="px-4 py-2 border border-gray-300 text-gray-600 rounded-md hover:bg-gray-50 transition-colors text-sm"
+            >
+              Logout
+            </button>
+          )}
         </div>
 
         <div className="flex justify-end space-x-3">

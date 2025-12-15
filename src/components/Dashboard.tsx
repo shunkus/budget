@@ -2,14 +2,12 @@
 
 import { useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
-import { useAuth } from '@/contexts/AuthContext';
 import SettingsModal from './SettingsModal';
 import ExpenseInput from './ExpenseInput';
 import ExpenseHistoryModal from './ExpenseHistoryModal';
 
 export default function Dashboard() {
   const { budgetData, isLoading, updateCurrentBudget } = useBudget();
-  const { logout } = useAuth();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -104,12 +102,6 @@ export default function Dashboard() {
                   d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                 />
               </svg>
-            </button>
-            <button
-              onClick={logout}
-              className="text-sm text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              Logout
             </button>
           </div>
         </div>
