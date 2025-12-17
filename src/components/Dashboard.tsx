@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
 import SettingsModal from './SettingsModal';
 import ExpenseInput from './ExpenseInput';
+import IncomeInput from './IncomeInput';
 import ExpenseHistoryModal from './ExpenseHistoryModal';
 
 export default function Dashboard() {
@@ -141,9 +142,16 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Expense Input */}
-        <div className="mt-6">
-          <ExpenseInput />
+        {/* Transaction Inputs */}
+        <div className="mt-6 space-y-3">
+          <div>
+            <p className="text-sm text-gray-500 mb-2">Add Expense</p>
+            <ExpenseInput />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 mb-2">Add Budget</p>
+            <IncomeInput />
+          </div>
         </div>
       </main>
 

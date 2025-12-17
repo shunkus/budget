@@ -1,17 +1,20 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { BudgetData, ExpenseRecord, getBudgetData, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord } from '@/lib/storage';
+import { BudgetData, ExpenseRecord, IncomeRecord, getBudgetData, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord, getIncomeHistory, addIncomeRecord, deleteIncomeRecord } from '@/lib/storage';
 
 interface BudgetContextType {
   budgetData: BudgetData;
   expenseHistory: ExpenseRecord[];
+  incomeHistory: IncomeRecord[];
   isLoading: boolean;
   updateDailyBudget: (amount: number) => void;
   updateCurrentBudget: (amount: number) => void;
   updateLastUpdateDate: (date: string) => void;
   addExpense: (amount: number) => void;
   removeExpense: (id: string, amount: number) => void;
+  addIncome: (amount: number) => void;
+  removeIncome: (id: string, amount: number) => void;
   refreshBudget: () => void;
 }
 
@@ -24,12 +27,14 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     lastUpdateDate: '',
   });
   const [expenseHistory, setExpenseHistory] = useState<ExpenseRecord[]>([]);
+  const [incomeHistory, setIncomeHistory] = useState<IncomeRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshBudget = useCallback(() => {
     const updatedData = calculateAndUpdateBudget();
     setBudgetData(updatedData);
     setExpenseHistory(getExpenseHistory());
+    setIncomeHistory(getIncomeHistory());
   }, []);
 
   useEffect(() => {
@@ -77,9 +82,31 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     setBudgetData(newData);
   };
 
+  const addIncome = (amount: number) => {
+    // Add to history
+    const record = addIncomeRecord(amount);
+    setIncomeHistory(prev => [...prev, record]);
+    // Add to budget
+    const newBudget = budgetData.currentBudget + amount;
+    const newData = { ...budgetData, currentBudget: newBudget };
+    saveBudgetData({ currentBudget: newBudget });
+    setBudgetData(newData);
+  };
+
+  const removeIncome = (id: string, amount: number) => {
+    // Remove from history
+    deleteIncomeRecord(id);
+    setIncomeHistory(prev => prev.filter(r => r.id !== id));
+    // Deduct from budget
+    const newBudget = budgetData.currentBudget - amount;
+    const newData = { ...budgetData, currentBudget: newBudget };
+    saveBudgetData({ currentBudget: newBudget });
+    setBudgetData(newData);
+  };
+
   return (
     <BudgetContext.Provider
-      value={{ budgetData, expenseHistory, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, addExpense, removeExpense, refreshBudget }}
+      value={{ budgetData, expenseHistory, incomeHistory, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, addExpense, removeExpense, addIncome, removeIncome, refreshBudget }}
     >
       {children}
     </BudgetContext.Provider>

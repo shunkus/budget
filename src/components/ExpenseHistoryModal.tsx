@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
 
 interface ExpenseHistoryModalProps {
@@ -7,24 +8,45 @@ interface ExpenseHistoryModalProps {
   onClose: () => void;
 }
 
+type TabType = 'all' | 'expense' | 'income';
+
+interface TransactionItem {
+  id: string;
+  amount: number;
+  date: string;
+  timestamp: number;
+  type: 'expense' | 'income';
+  isDaily?: boolean;
+}
+
 export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryModalProps) {
-  const { expenseHistory, removeExpense } = useBudget();
+  const { expenseHistory, incomeHistory, removeExpense, removeIncome } = useBudget();
+  const [activeTab, setActiveTab] = useState<TabType>('all');
 
   if (!isOpen) return null;
 
-  // Sort by timestamp descending (newest first)
-  const sortedHistory = [...expenseHistory].sort((a, b) => b.timestamp - a.timestamp);
+  // Combine and sort all transactions
+  const allTransactions: TransactionItem[] = [
+    ...expenseHistory.map(r => ({ ...r, type: 'expense' as const, isDaily: false })),
+    ...incomeHistory.map(r => ({ ...r, type: 'income' as const })),
+  ].sort((a, b) => b.timestamp - a.timestamp);
+
+  // Filter based on active tab
+  const filteredTransactions = activeTab === 'all'
+    ? allTransactions
+    : allTransactions.filter(t => t.type === activeTab);
 
   // Group by date
-  const groupedByDate = sortedHistory.reduce((acc, record) => {
+  const groupedByDate = filteredTransactions.reduce((acc, record) => {
     if (!acc[record.date]) {
       acc[record.date] = [];
     }
     acc[record.date].push(record);
     return acc;
-  }, {} as Record<string, typeof sortedHistory>);
+  }, {} as Record<string, TransactionItem[]>);
 
   const totalExpense = expenseHistory.reduce((sum, record) => sum + record.amount, 0);
+  const totalIncome = incomeHistory.reduce((sum, record) => sum + record.amount, 0);
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -45,11 +67,19 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
     return date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
   };
 
+  const handleDelete = (record: TransactionItem) => {
+    if (record.type === 'expense') {
+      removeExpense(record.id, record.amount);
+    } else {
+      removeIncome(record.id, record.amount);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[80vh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-gray-800">Expense History</h2>
+          <h2 className="text-xl font-bold text-gray-800">Transaction History</h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700"
@@ -60,14 +90,55 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
           </button>
         </div>
 
-        <div className="mb-4 p-3 bg-gray-100 rounded-lg">
-          <p className="text-sm text-gray-500">Total (Last 7 days)</p>
-          <p className="text-2xl font-bold text-gray-800">¥{totalExpense.toLocaleString()}</p>
+        {/* Summary */}
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <div className="p-3 bg-red-50 rounded-lg">
+            <p className="text-sm text-red-600">Expenses</p>
+            <p className="text-xl font-bold text-red-700">-¥{totalExpense.toLocaleString()}</p>
+          </div>
+          <div className="p-3 bg-green-50 rounded-lg">
+            <p className="text-sm text-green-600">Income</p>
+            <p className="text-xl font-bold text-green-700">+¥{totalIncome.toLocaleString()}</p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex mb-4 border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`flex-1 py-2 text-sm font-medium ${
+              activeTab === 'all'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setActiveTab('expense')}
+            className={`flex-1 py-2 text-sm font-medium ${
+              activeTab === 'expense'
+                ? 'text-red-600 border-b-2 border-red-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Expenses
+          </button>
+          <button
+            onClick={() => setActiveTab('income')}
+            className={`flex-1 py-2 text-sm font-medium ${
+              activeTab === 'income'
+                ? 'text-green-600 border-b-2 border-green-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Income
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {Object.keys(groupedByDate).length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No expenses recorded</p>
+            <p className="text-gray-500 text-center py-8">No transactions recorded</p>
           ) : (
             Object.entries(groupedByDate).map(([date, records]) => (
               <div key={date} className="mb-4">
@@ -76,19 +147,32 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
                   {records.map((record) => (
                     <div
                       key={record.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      className={`flex items-center justify-between p-3 rounded-lg ${
+                        record.type === 'expense' ? 'bg-red-50' : 'bg-green-50'
+                      }`}
                     >
                       <div>
-                        <p className="font-medium text-gray-800">¥{record.amount.toLocaleString()}</p>
+                        <p className={`font-medium ${
+                          record.type === 'expense' ? 'text-red-700' : 'text-green-700'
+                        }`}>
+                          {record.type === 'expense' ? '-' : '+'}¥{record.amount.toLocaleString()}
+                          {record.isDaily && (
+                            <span className="ml-2 text-xs font-normal text-green-600 bg-green-100 px-1.5 py-0.5 rounded">
+                              Daily
+                            </span>
+                          )}
+                        </p>
                         <p className="text-xs text-gray-400">{formatTime(record.timestamp)}</p>
                       </div>
-                      <button
-                        onClick={() => removeExpense(record.id, record.amount)}
-                        className="text-red-500 hover:text-red-700 text-sm"
-                        title="Delete and restore to budget"
-                      >
-                        Delete
-                      </button>
+                      {!record.isDaily && (
+                        <button
+                          onClick={() => handleDelete(record)}
+                          className="text-gray-500 hover:text-gray-700 text-sm"
+                          title={record.type === 'expense' ? 'Delete and restore to budget' : 'Delete and deduct from budget'}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

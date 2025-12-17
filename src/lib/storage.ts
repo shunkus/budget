@@ -5,15 +5,21 @@ const STORAGE_KEYS = {
   DAILY_BUDGET: 'budget_daily',
   LAST_UPDATE_DATE: 'budget_last_update',
   EXPENSE_HISTORY: 'budget_expense_history',
+  INCOME_HISTORY: 'budget_income_history',
 } as const;
 
-// Expense history types
-export interface ExpenseRecord {
+// Transaction history types
+export interface TransactionRecord {
   id: string;
   amount: number;
   date: string; // ISO date string (YYYY-MM-DD)
   timestamp: number; // Unix timestamp for sorting
+  isDaily?: boolean; // true if this is a daily budget addition
 }
+
+// Alias for backward compatibility
+export type ExpenseRecord = TransactionRecord;
+export type IncomeRecord = TransactionRecord;
 
 export interface BudgetData {
   currentBudget: number;
@@ -85,15 +91,48 @@ export function calculateAndUpdateBudget(): BudgetData {
 
   if (data.lastUpdateDate !== today) {
     const daysPassed = getDaysDifference(data.lastUpdateDate, today);
-    if (daysPassed > 0) {
+    if (daysPassed > 0 && data.dailyBudget > 0) {
       const addedBudget = daysPassed * data.dailyBudget;
       data.currentBudget += addedBudget;
+      data.lastUpdateDate = today;
+      saveBudgetData(data);
+
+      // Record daily budget addition to income history
+      addDailyBudgetToHistory(addedBudget);
+    } else if (daysPassed > 0) {
+      // Update date even if daily budget is 0
       data.lastUpdateDate = today;
       saveBudgetData(data);
     }
   }
 
   return data;
+}
+
+// Add daily budget to income history
+function addDailyBudgetToHistory(totalAmount: number): void {
+  if (typeof window === 'undefined') return;
+
+  const history = getIncomeHistory();
+  const now = new Date();
+
+  const record: IncomeRecord = {
+    id: `daily-${now.getTime()}-${Math.random().toString(36).substring(2, 11)}`,
+    amount: totalAmount,
+    date: getTodayDateString(),
+    timestamp: now.getTime(),
+    isDaily: true,
+  };
+
+  history.push(record);
+
+  // Clean up old records (older than 7 days)
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - DAYS_TO_KEEP);
+  const cutoffTimestamp = cutoffDate.getTime();
+  const filteredHistory = history.filter(r => r.timestamp >= cutoffTimestamp);
+
+  localStorage.setItem(STORAGE_KEYS.INCOME_HISTORY, JSON.stringify(filteredHistory));
 }
 
 // Expense history functions
@@ -146,4 +185,54 @@ export function deleteExpenseRecord(id: string): void {
   const history = getExpenseHistory();
   const filteredHistory = history.filter(r => r.id !== id);
   localStorage.setItem(STORAGE_KEYS.EXPENSE_HISTORY, JSON.stringify(filteredHistory));
+}
+
+// Income history functions
+export function getIncomeHistory(): IncomeRecord[] {
+  if (typeof window === 'undefined') return [];
+
+  const stored = localStorage.getItem(STORAGE_KEYS.INCOME_HISTORY);
+  if (!stored) return [];
+
+  try {
+    const history: IncomeRecord[] = JSON.parse(stored);
+    // Filter to keep only last 7 days
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - DAYS_TO_KEEP);
+    const cutoffTimestamp = cutoffDate.getTime();
+
+    return history.filter(record => record.timestamp >= cutoffTimestamp);
+  } catch {
+    return [];
+  }
+}
+
+export function addIncomeRecord(amount: number): IncomeRecord {
+  const history = getIncomeHistory();
+  const now = new Date();
+
+  const record: IncomeRecord = {
+    id: `${now.getTime()}-${Math.random().toString(36).substring(2, 11)}`,
+    amount,
+    date: getTodayDateString(),
+    timestamp: now.getTime(),
+  };
+
+  history.push(record);
+
+  // Clean up old records (older than 7 days)
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - DAYS_TO_KEEP);
+  const cutoffTimestamp = cutoffDate.getTime();
+  const filteredHistory = history.filter(r => r.timestamp >= cutoffTimestamp);
+
+  localStorage.setItem(STORAGE_KEYS.INCOME_HISTORY, JSON.stringify(filteredHistory));
+
+  return record;
+}
+
+export function deleteIncomeRecord(id: string): void {
+  const history = getIncomeHistory();
+  const filteredHistory = history.filter(r => r.id !== id);
+  localStorage.setItem(STORAGE_KEYS.INCOME_HISTORY, JSON.stringify(filteredHistory));
 }
