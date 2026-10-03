@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
 import SettingsModal from './SettingsModal';
-import ExpenseInput from './ExpenseInput';
-import IncomeInput from './IncomeInput';
+import Keypad from './Keypad';
 import ExpenseHistoryModal from './ExpenseHistoryModal';
 import SubscriptionsModal from './SubscriptionsModal';
 import { getDailySubscriptionTotal } from '@/lib/storage';
@@ -132,33 +131,34 @@ export default function Dashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-16">
-        <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
-          <p className="text-gray-500 mb-2">Current Budget</p>
+      <main className="max-w-md mx-auto px-4 py-3">
+        <div className="bg-white rounded-2xl shadow-lg px-6 py-4 text-center">
+          <p className="text-sm text-gray-500 mb-1">Current Budget</p>
           {isEditing ? (
             <div className="flex items-center justify-center">
-              <span className="text-4xl font-bold text-gray-800 mr-2">¥</span>
+              <span className="text-3xl font-bold text-gray-800 mr-2">¥</span>
               <input
                 type="number"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
                 onBlur={handleEditSave}
                 onKeyDown={handleEditKeyDown}
-                className="text-5xl font-bold text-gray-800 w-48 text-center border-b-2 border-blue-500 focus:outline-none"
+                className="text-4xl font-bold text-gray-800 w-48 text-center border-b-2 border-blue-500 focus:outline-none"
                 autoFocus
               />
             </div>
           ) : (
             <p
-              className="text-5xl font-bold text-gray-800 cursor-pointer hover:text-blue-600 transition-colors"
+              className="text-4xl font-bold text-gray-800 cursor-pointer hover:text-blue-600 transition-colors"
               onClick={handleBudgetClick}
               title="Click to edit"
             >
               {formatCurrency(budgetData.currentBudget)}
             </p>
           )}
-          <p className="text-sm text-gray-400 mt-4">
+          <p className="text-sm text-gray-400 mt-2">
             Daily: {formatCurrency(budgetData.dailyBudget)} / day
+            <span className="text-xs text-gray-300 ml-2">Updated {budgetData.lastUpdateDate}</span>
           </p>
           {subscriptions.length > 0 && (
             <p
@@ -168,21 +168,11 @@ export default function Dashboard() {
               Subscriptions: -{formatCurrency(getDailySubscriptionTotal(subscriptions))} / day
             </p>
           )}
-          <p className="text-xs text-gray-300 mt-2">
-            Last updated: {budgetData.lastUpdateDate}
-          </p>
         </div>
 
-        {/* Transaction Inputs */}
-        <div className="mt-6 space-y-3">
-          <div>
-            <p className="text-sm text-gray-500 mb-2">Add Expense</p>
-            <ExpenseInput />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 mb-2">Add Budget</p>
-            <IncomeInput />
-          </div>
+        {/* Transaction Input */}
+        <div className="mt-4">
+          <Keypad />
         </div>
       </main>
 
