@@ -100,17 +100,32 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
   // Record dates are JST date strings, so compare against JST today/yesterday
   const formatDate = (dateString: string) => {
     const today = getTodayDateString();
-    if (dateString === today) return 'Today';
-    if (dateString === getDateStringDaysAgo(1)) return 'Yesterday';
-
     const date = new Date(dateString + 'T00:00:00Z');
-    const isThisYear = dateString.slice(0, 4) === today.slice(0, 4);
-    return date.toLocaleDateString('ja-JP', {
-      timeZone: 'UTC',
-      ...(isThisYear ? {} : { year: 'numeric' }),
-      month: 'short',
-      day: 'numeric',
-    });
+    const weekday = date.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short' });
+
+    let label: string;
+    if (dateString === today) {
+      label = 'Today';
+    } else if (dateString === getDateStringDaysAgo(1)) {
+      label = 'Yesterday';
+    } else {
+      const isThisYear = dateString.slice(0, 4) === today.slice(0, 4);
+      label = date.toLocaleDateString('en-US', {
+        timeZone: 'UTC',
+        ...(isThisYear ? {} : { year: 'numeric' }),
+        month: 'short',
+        day: 'numeric',
+      });
+    }
+    return `${label} (${weekday})`;
+  };
+
+  // Weekends stand out: Saturday in blue, Sunday in red
+  const dateColorClass = (dateString: string) => {
+    const day = new Date(dateString + 'T00:00:00Z').getUTCDay();
+    if (day === 6) return 'text-blue-500';
+    if (day === 0) return 'text-red-500';
+    return 'text-gray-500';
   };
 
   const handleDelete = (record: TransactionItem) => {
@@ -243,7 +258,7 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
             Object.entries(groupedByDate).map(([date, records]) => (
               <div key={date} className="mb-4">
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-sm font-medium text-gray-500">{formatDate(date)}</h3>
+                  <h3 className={`text-sm font-medium ${dateColorClass(date)}`}>{formatDate(date)}</h3>
                   <span className={`text-sm font-semibold ${
                     dailyNet[date] > 0 ? 'text-green-600' : dailyNet[date] < 0 ? 'text-red-600' : 'text-gray-500'
                   }`}>
