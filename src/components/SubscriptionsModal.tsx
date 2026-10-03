@@ -2,7 +2,24 @@
 
 import { useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
-import { BillingCycle, getDailyCost, getDailySubscriptionTotal } from '@/lib/storage';
+import { BillingCycle, Subscription, getDailyCost, getDailySubscriptionTotal } from '@/lib/storage';
+
+type CycleFilter = 'all' | BillingCycle;
+type SortOrder = 'cost-desc' | 'cost-asc' | 'name' | 'newest';
+
+const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
+  { value: 'name', label: 'Name' },
+  { value: 'cost-desc', label: 'Cost: high to low' },
+  { value: 'cost-asc', label: 'Cost: low to high' },
+  { value: 'newest', label: 'Newest' },
+];
+
+const compareSubscriptions: Record<SortOrder, (a: Subscription, b: Subscription) => number> = {
+  'cost-desc': (a, b) => getDailyCost(b) - getDailyCost(a),
+  'cost-asc': (a, b) => getDailyCost(a) - getDailyCost(b),
+  name: (a, b) => a.title.localeCompare(b.title, 'ja'),
+  newest: (a, b) => b.createdAt - a.createdAt,
+};
 
 interface SubscriptionsModalProps {
   isOpen: boolean;
@@ -15,6 +32,11 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
   const [amount, setAmount] = useState('');
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [cycleFilter, setCycleFilter] = useState<CycleFilter>('all');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('name');
+  const [showFilters, setShowFilters] = useState(false);
 
   if (!isOpen) return null;
 
@@ -36,12 +58,38 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
 
   const formatYen = (value: number) => `¥${Math.round(value).toLocaleString()}`;
 
-  // Most expensive first, to make reviewing subscriptions easier
-  const sortedSubscriptions = [...subscriptions].sort((a, b) => getDailyCost(b) - getDailyCost(a));
+  // Equivalent amount in the other billing cycle
+  const formatAlternateCycle = (subscription: Subscription) => (
+    subscription.cycle === 'monthly'
+      ? `${formatYen(subscription.amount * 12)} / year`
+      : `${formatYen(subscription.amount / 12)} / month`
+  );
+
+  const handleCopy = async () => {
+    const text = visibleSubscriptions
+      .map(s => `${s.title}\t${s.cycle === 'monthly' ? 'Monthly' : 'Yearly'}\t${formatYen(s.amount)}`)
+      .join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('failed');
+    }
+    setTimeout(() => setCopyStatus('idle'), 2000);
+  };
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const visibleSubscriptions = subscriptions
+    .filter(s => cycleFilter === 'all' || s.cycle === cycleFilter)
+    .filter(s => s.title.toLowerCase().includes(normalizedQuery))
+    .sort(compareSubscriptions[sortOrder]);
+  const isFiltered = visibleSubscriptions.length !== subscriptions.length;
+  // Lets the user notice applied filters even while the panel is hidden
+  const hasActiveFilters = normalizedQuery !== '' || cycleFilter !== 'all' || sortOrder !== 'name';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[80vh] flex flex-col">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90dvh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-gray-800">Subscriptions</h2>
           <button
@@ -56,17 +104,17 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
 
         {/* Summary */}
         <div className="mb-4 grid grid-cols-3 gap-2">
-          <div className="p-3 bg-purple-50 rounded-lg">
+          <div className="p-2 sm:p-3 bg-purple-50 rounded-lg min-w-0">
             <p className="text-xs text-purple-600">Per day</p>
-            <p className="text-base font-bold text-purple-700 whitespace-nowrap">-{formatYen(dailyTotal)}</p>
+            <p className="text-sm sm:text-base font-bold text-purple-700 whitespace-nowrap">-{formatYen(dailyTotal)}</p>
           </div>
-          <div className="p-3 bg-purple-50 rounded-lg">
+          <div className="p-2 sm:p-3 bg-purple-50 rounded-lg min-w-0">
             <p className="text-xs text-purple-600">Per month</p>
-            <p className="text-base font-bold text-purple-700 whitespace-nowrap">-{formatYen(dailyTotal * 365 / 12)}</p>
+            <p className="text-sm sm:text-base font-bold text-purple-700 whitespace-nowrap">-{formatYen(dailyTotal * 365 / 12)}</p>
           </div>
-          <div className="p-3 bg-purple-50 rounded-lg">
+          <div className="p-2 sm:p-3 bg-purple-50 rounded-lg min-w-0">
             <p className="text-xs text-purple-600">Per year</p>
-            <p className="text-base font-bold text-purple-700 whitespace-nowrap">-{formatYen(dailyTotal * 365)}</p>
+            <p className="text-sm sm:text-base font-bold text-purple-700 whitespace-nowrap">-{formatYen(dailyTotal * 365)}</p>
           </div>
         </div>
 
@@ -111,12 +159,91 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
         </form>
 
         {/* List */}
+        {subscriptions.length > 0 && (
+          <div className="flex justify-between items-center mb-2">
+            <p className="text-sm text-gray-500">
+              {isFiltered
+                ? `${visibleSubscriptions.length} of ${subscriptions.length} subscriptions`
+                : `${subscriptions.length} subscriptions`}
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowFilters(prev => !prev)}
+                aria-expanded={showFilters}
+                aria-controls="subscription-filters"
+                className={`relative flex items-center gap-1 px-2 py-1 text-sm rounded-md transition-colors ${
+                  showFilters
+                    ? 'bg-purple-100 text-purple-700'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                Filter
+                {hasActiveFilters && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-purple-500 rounded-full" />
+                )}
+              </button>
+              <button
+                onClick={handleCopy}
+                disabled={visibleSubscriptions.length === 0}
+                className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors disabled:text-gray-300 disabled:hover:bg-transparent"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                {copyStatus === 'copied' ? 'Copied!' : copyStatus === 'failed' ? 'Copy failed' : 'Copy list'}
+              </button>
+            </div>
+          </div>
+        )}
+        {subscriptions.length > 0 && showFilters && (
+          <div id="subscription-filters" className="mb-2 space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by title"
+                className="flex-1 w-0 px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-800 text-sm"
+              />
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                aria-label="Sort order"
+                className="px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-800 bg-white text-sm"
+              >
+                {SORT_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex rounded-md border border-gray-300 overflow-hidden text-sm">
+              {(['all', 'monthly', 'yearly'] as const).map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setCycleFilter(value)}
+                  className={`flex-1 py-1.5 transition-colors ${
+                    cycleFilter === value
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {value === 'all' ? 'All' : value === 'monthly' ? 'Monthly' : 'Yearly'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto">
-          {sortedSubscriptions.length === 0 ? (
+          {subscriptions.length === 0 ? (
             <p className="text-gray-500 text-center py-8">No subscriptions registered</p>
+          ) : visibleSubscriptions.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">No matching subscriptions</p>
           ) : (
             <div className="space-y-2">
-              {sortedSubscriptions.map((subscription) => (
+              {visibleSubscriptions.map((subscription) => (
                 <div
                   key={subscription.id}
                   className="flex items-center justify-between p-3 rounded-lg bg-purple-50"
@@ -125,9 +252,12 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
                     <p className="font-medium text-gray-800 truncate">{subscription.title}</p>
                     <p className="text-xs text-gray-500">
                       {formatYen(subscription.amount)} / {subscription.cycle === 'monthly' ? 'month' : 'year'}
-                      <span className="ml-2 text-purple-600">
-                        -¥{getDailyCost(subscription).toFixed(1)} / day
+                      <span className="ml-1 text-gray-400">
+                        ({formatAlternateCycle(subscription)})
                       </span>
+                    </p>
+                    <p className="text-xs text-purple-600">
+                      -¥{getDailyCost(subscription).toLocaleString('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / day
                     </p>
                   </div>
                   {deleteTargetId === subscription.id ? (
