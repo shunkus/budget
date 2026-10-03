@@ -13,6 +13,8 @@ interface ExpenseHistoryModalProps {
 type TabType = 'all' | 'expense' | 'income';
 type PeriodType = '7d' | '30d' | '1y' | 'all';
 
+const MAX_NOTE_SUGGESTIONS = 6;
+
 const PERIOD_OPTIONS: { value: PeriodType; label: string; days: number | null }[] = [
   { value: '7d', label: '7 days', days: 7 },
   { value: '30d', label: '30 days', days: 30 },
@@ -141,7 +143,10 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
     setEditingId(null);
   };
 
-  const noteSuggestions = getFrequentNotes([...expenseHistory, ...incomeHistory]);
+  const trimmedEditNote = editNote.trim();
+  const noteSuggestions = getFrequentNotes([...expenseHistory, ...incomeHistory])
+    .filter(n => n !== trimmedEditNote && n.toLowerCase().includes(trimmedEditNote.toLowerCase()))
+    .slice(0, MAX_NOTE_SUGGESTIONS);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -274,9 +279,22 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
                         placeholder="Memo (optional)"
                         aria-label="Memo"
                         maxLength={MAX_NOTE_LENGTH}
-                        list="note-suggestions"
                         className="w-full px-3 py-2 bg-surface border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 text-sm"
                       />
+                      {noteSuggestions.length > 0 && (
+                        <div className="flex gap-2 overflow-x-auto">
+                          {noteSuggestions.map(note => (
+                            <button
+                              key={note}
+                              type="button"
+                              onClick={() => setEditNote(note)}
+                              className="shrink-0 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full text-sm text-blue-700 hover:bg-blue-100 active:scale-95 transition"
+                            >
+                              {note}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <div className="flex justify-between items-center">
                         {confirmDelete ? (
                           <div className="flex items-center gap-2">
@@ -362,10 +380,6 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
             ))
           )}
         </div>
-
-        <datalist id="note-suggestions">
-          {noteSuggestions.map(note => <option key={note} value={note} />)}
-        </datalist>
 
         <div className="mt-4 pt-4 shrink-0 border-t border-gray-200">
           <button
