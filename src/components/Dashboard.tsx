@@ -54,7 +54,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-dvh flex flex-col bg-gray-100">
       {/* Header */}
       <header className="bg-surface shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
@@ -131,7 +131,7 @@ export default function Dashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-md mx-auto px-4 py-3">
+      <main className="flex-1 flex flex-col w-full max-w-md mx-auto px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="bg-surface rounded-2xl shadow-lg px-6 py-4 text-center">
           <p className="text-sm text-gray-500 mb-1">
             Current Budget
@@ -173,8 +173,8 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Transaction Input */}
-        <div className="mt-4">
+        {/* Transaction Input: pinned to the bottom for one-handed use */}
+        <div className="mt-auto pt-4">
           <Keypad />
         </div>
       </main>
