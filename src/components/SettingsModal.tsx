@@ -77,7 +77,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             id="lastUpdate"
             value={lastUpdate}
             onChange={(e) => setLastUpdate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
+            className="block w-full min-w-0 appearance-none bg-white px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
           />
           <p className="text-sm text-gray-500 mt-1">
             Daily budget is calculated from this date.
