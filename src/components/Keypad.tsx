@@ -2,31 +2,11 @@
 
 import { useRef, useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
-import { TransactionRecord } from '@/lib/storage';
+import { AMOUNT_WINDOW_DAYS, MAX_NOTE_LENGTH, getFrequentNotes, getFrequentValues } from '@/lib/suggestions';
 import { appendKey, backspace, evaluate, hasOperator } from '@/lib/calculator';
 
 const MAX_FREQUENT_AMOUNTS = 4;
 const MAX_NOTE_SUGGESTIONS = 6;
-const MAX_NOTE_LENGTH = 50;
-const DAY_MS = 24 * 60 * 60 * 1000;
-// Recent windows keep suggestions relevant now that history spans years
-const AMOUNT_WINDOW_DAYS = 30;
-const NOTE_WINDOW_DAYS = 90;
-
-// Most frequent values among recent records, ties broken by most recent use
-function getFrequentValues<T>(records: TransactionRecord[], windowDays: number, pick: (r: TransactionRecord) => T | undefined): T[] {
-  const cutoff = Date.now() - windowDays * DAY_MS;
-  const stats = new Map<T, { count: number; lastUsed: number }>();
-  for (const record of records) {
-    const value = pick(record);
-    if (record.timestamp < cutoff || value === undefined) continue;
-    const stat = stats.get(value) ?? { count: 0, lastUsed: 0 };
-    stats.set(value, { count: stat.count + 1, lastUsed: Math.max(stat.lastUsed, record.timestamp) });
-  }
-  return [...stats.entries()]
-    .sort(([, a], [, b]) => b.count - a.count || b.lastUsed - a.lastUsed)
-    .map(([value]) => value);
-}
 
 const formatYen = (value: number) => `¥${value.toLocaleString()}`;
 
@@ -58,7 +38,7 @@ export default function Keypad() {
 
   const trimmedNote = note.trim();
   const noteQuery = trimmedNote.toLowerCase();
-  const noteSuggestions = getFrequentValues([...expenseHistory, ...incomeHistory], NOTE_WINDOW_DAYS, r => r.note)
+  const noteSuggestions = getFrequentNotes([...expenseHistory, ...incomeHistory])
     .filter(n => n !== trimmedNote && n.toLowerCase().includes(noteQuery))
     .slice(0, MAX_NOTE_SUGGESTIONS);
   // While typing a memo the OS keyboard covers the keypad, so the chip row offers memos instead

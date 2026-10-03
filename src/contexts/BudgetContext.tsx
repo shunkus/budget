@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { BudgetData, BillingCycle, ExpenseRecord, IncomeRecord, Subscription, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord, getIncomeHistory, addIncomeRecord, deleteIncomeRecord, getSubscriptions, addSubscriptionRecord, deleteSubscriptionRecord } from '@/lib/storage';
+import { BudgetData, BillingCycle, ExpenseRecord, IncomeRecord, Subscription, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord, getIncomeHistory, addIncomeRecord, deleteIncomeRecord, updateExpenseRecord, updateIncomeRecord, applyRecordChanges, RecordChanges, getSubscriptions, addSubscriptionRecord, deleteSubscriptionRecord } from '@/lib/storage';
 
 interface BudgetContextType {
   budgetData: BudgetData;
@@ -16,6 +16,7 @@ interface BudgetContextType {
   removeExpense: (id: string, amount: number) => void;
   addIncome: (amount: number, note?: string) => void;
   removeIncome: (id: string, amount: number) => void;
+  editTransaction: (type: 'expense' | 'income', id: string, changes: RecordChanges) => void;
   addSubscription: (title: string, amount: number, cycle: BillingCycle) => void;
   removeSubscription: (id: string) => void;
   refreshBudget: () => void;
@@ -109,6 +110,31 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     setBudgetData(newData);
   };
 
+  const editTransaction = (type: 'expense' | 'income', id: string, changes: RecordChanges) => {
+    const history = type === 'expense' ? expenseHistory : incomeHistory;
+    const original = history.find(r => r.id === id);
+    if (!original) return;
+
+    if (type === 'expense') {
+      updateExpenseRecord(id, changes);
+    } else {
+      updateIncomeRecord(id, changes);
+    }
+    if (type === 'expense') {
+      setExpenseHistory(prev => applyRecordChanges(prev, id, changes));
+    } else {
+      setIncomeHistory(prev => applyRecordChanges(prev, id, changes));
+    }
+
+    // Adjust budget by the difference: a larger expense lowers it, a larger income raises it
+    const diff = changes.amount - original.amount;
+    if (diff !== 0) {
+      const newBudget = budgetData.currentBudget + (type === 'expense' ? -diff : diff);
+      saveBudgetData({ currentBudget: newBudget });
+      setBudgetData({ ...budgetData, currentBudget: newBudget });
+    }
+  };
+
   const addSubscription = (title: string, amount: number, cycle: BillingCycle) => {
     const subscription = addSubscriptionRecord(title, amount, cycle);
     setSubscriptions(prev => [...prev, subscription]);
@@ -121,7 +147,7 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
 
   return (
     <BudgetContext.Provider
-      value={{ budgetData, expenseHistory, incomeHistory, subscriptions, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, addExpense, removeExpense, addIncome, removeIncome, addSubscription, removeSubscription, refreshBudget }}
+      value={{ budgetData, expenseHistory, incomeHistory, subscriptions, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, addExpense, removeExpense, addIncome, removeIncome, editTransaction, addSubscription, removeSubscription, refreshBudget }}
     >
       {children}
     </BudgetContext.Provider>

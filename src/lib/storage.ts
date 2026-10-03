@@ -227,6 +227,30 @@ export function addExpenseRecord(amount: number, note?: string): ExpenseRecord {
   return record;
 }
 
+export interface RecordChanges {
+  amount: number;
+  note?: string;
+}
+
+// Apply amount/note changes to one record; an empty note removes the field
+export function applyRecordChanges(records: TransactionRecord[], id: string, changes: RecordChanges): TransactionRecord[] {
+  return records.map(r => {
+    if (r.id !== id) return r;
+    const updated: TransactionRecord = { ...r, amount: changes.amount };
+    if (changes.note) {
+      updated.note = changes.note;
+    } else {
+      delete updated.note;
+    }
+    return updated;
+  });
+}
+
+export function updateExpenseRecord(id: string, changes: RecordChanges): void {
+  const history = applyRecordChanges(getExpenseHistory(), id, changes);
+  localStorage.setItem(STORAGE_KEYS.EXPENSE_HISTORY, JSON.stringify(history));
+}
+
 export function deleteExpenseRecord(id: string): void {
   const history = getExpenseHistory();
   const filteredHistory = history.filter(r => r.id !== id);
@@ -276,6 +300,11 @@ export function addIncomeRecord(amount: number, note?: string): IncomeRecord {
   localStorage.setItem(STORAGE_KEYS.INCOME_HISTORY, JSON.stringify(filteredHistory));
 
   return record;
+}
+
+export function updateIncomeRecord(id: string, changes: RecordChanges): void {
+  const history = applyRecordChanges(getIncomeHistory(), id, changes);
+  localStorage.setItem(STORAGE_KEYS.INCOME_HISTORY, JSON.stringify(history));
 }
 
 export function deleteIncomeRecord(id: string): void {

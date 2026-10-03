@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
 import { getDateStringDaysAgo, getTodayDateString } from '@/lib/storage';
+import { MAX_NOTE_LENGTH, getFrequentNotes } from '@/lib/suggestions';
 
 interface ExpenseHistoryModalProps {
   isOpen: boolean;
@@ -31,9 +32,17 @@ interface TransactionItem {
 }
 
 export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryModalProps) {
-  const { expenseHistory, incomeHistory, removeExpense, removeIncome } = useBudget();
+  const { expenseHistory, incomeHistory, removeExpense, removeIncome, editTransaction } = useBudget();
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [period, setPeriod] = useState<PeriodType>('7d');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editNote, setEditNote] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Bring the editor fully into view when it opens near the edge of the list
+  const scrollEditorIntoView = useCallback((el: HTMLDivElement | null) => {
+    el?.scrollIntoView({ block: 'nearest' });
+  }, []);
 
   if (!isOpen) return null;
 
@@ -108,7 +117,31 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
     } else {
       removeIncome(record.id, record.amount);
     }
+    setEditingId(null);
   };
+
+  const handleClose = () => {
+    setEditingId(null);
+    onClose();
+  };
+
+  const startEditing = (record: TransactionItem) => {
+    setEditingId(record.id);
+    setEditAmount(String(record.amount));
+    setEditNote(record.note ?? '');
+    setConfirmDelete(false);
+  };
+
+  const parsedEditAmount = Number(editAmount);
+  const isEditValid = editAmount !== '' && Number.isInteger(parsedEditAmount) && parsedEditAmount > 0;
+
+  const handleSaveEdit = (record: TransactionItem) => {
+    if (!isEditValid) return;
+    editTransaction(record.type, record.id, { amount: parsedEditAmount, note: editNote.trim() || undefined });
+    setEditingId(null);
+  };
+
+  const noteSuggestions = getFrequentNotes([...expenseHistory, ...incomeHistory]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -116,7 +149,7 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
         <div className="flex justify-between items-center mb-4 shrink-0">
           <h2 className="text-xl font-bold text-gray-800">Transaction History</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-500 hover:text-gray-700"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,7 +246,80 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
                   </span>
                 </div>
                 <div className="space-y-2">
-                  {records.map((record) => (
+                  {records.map((record) => editingId === record.id ? (
+                    <div
+                      key={record.id}
+                      ref={scrollEditorIntoView}
+                      className={`p-3 rounded-lg space-y-2 border-2 border-blue-500 ${
+                        record.type === 'expense' ? 'bg-red-50' : 'bg-green-50'
+                      }`}
+                    >
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">¥</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={editAmount}
+                          onChange={(e) => setEditAmount(e.target.value)}
+                          aria-label="Amount"
+                          min="1"
+                          step="1"
+                          className="w-full pl-7 pr-3 py-2 bg-surface border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        value={editNote}
+                        onChange={(e) => setEditNote(e.target.value)}
+                        placeholder="Memo (optional)"
+                        aria-label="Memo"
+                        maxLength={MAX_NOTE_LENGTH}
+                        list="note-suggestions"
+                        className="w-full px-3 py-2 bg-surface border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 text-sm"
+                      />
+                      <div className="flex justify-between items-center">
+                        {confirmDelete ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleDelete(record)}
+                              className="px-2 py-1 bg-red-500 text-white text-sm rounded-md hover:bg-red-600 transition-colors"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(false)}
+                              className="text-sm text-gray-500 hover:text-gray-700"
+                            >
+                              Keep
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDelete(true)}
+                            className="text-sm text-red-600 hover:text-red-700"
+                            title={record.type === 'expense' ? 'Delete and restore to budget' : 'Delete and deduct from budget'}
+                          >
+                            Delete
+                          </button>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setEditingId(null)}
+                            className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleSaveEdit(record)}
+                            disabled={!isEditValid}
+                            className="px-3 py-1 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
                     <div
                       key={record.id}
                       className={`flex items-center justify-between p-3 rounded-lg ${
@@ -243,11 +349,10 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
                       </div>
                       {!record.isDaily && !record.isSubscription && (
                         <button
-                          onClick={() => handleDelete(record)}
+                          onClick={() => startEditing(record)}
                           className="ml-2 shrink-0 text-gray-500 hover:text-gray-700 text-sm"
-                          title={record.type === 'expense' ? 'Delete and restore to budget' : 'Delete and deduct from budget'}
                         >
-                          Delete
+                          Edit
                         </button>
                       )}
                     </div>
@@ -258,9 +363,13 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
           )}
         </div>
 
+        <datalist id="note-suggestions">
+          {noteSuggestions.map(note => <option key={note} value={note} />)}
+        </datalist>
+
         <div className="mt-4 pt-4 shrink-0 border-t border-gray-200">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
           >
             Close
