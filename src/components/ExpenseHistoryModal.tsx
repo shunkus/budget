@@ -45,6 +45,18 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
     return acc;
   }, {} as Record<string, TransactionItem[]>);
 
+  // Net change per date (income minus expenses), independent of the active tab
+  const dailyNet = allTransactions.reduce((acc, record) => {
+    const signed = record.type === 'income' ? record.amount : -record.amount;
+    acc[record.date] = (acc[record.date] ?? 0) + signed;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const formatSigned = (amount: number) => {
+    const sign = amount > 0 ? '+' : amount < 0 ? '-' : '±';
+    return `${sign}¥${Math.abs(amount).toLocaleString()}`;
+  };
+
   const totalExpense = expenseHistory.reduce((sum, record) => sum + record.amount, 0);
   const totalIncome = incomeHistory.reduce((sum, record) => sum + record.amount, 0);
 
@@ -142,7 +154,14 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
           ) : (
             Object.entries(groupedByDate).map(([date, records]) => (
               <div key={date} className="mb-4">
-                <h3 className="text-sm font-medium text-gray-500 mb-2">{formatDate(date)}</h3>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-sm font-medium text-gray-500">{formatDate(date)}</h3>
+                  <span className={`text-sm font-semibold ${
+                    dailyNet[date] > 0 ? 'text-green-600' : dailyNet[date] < 0 ? 'text-red-600' : 'text-gray-500'
+                  }`}>
+                    {formatSigned(dailyNet[date])}
+                  </span>
+                </div>
                 <div className="space-y-2">
                   {records.map((record) => (
                     <div
