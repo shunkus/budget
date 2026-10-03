@@ -2,11 +2,20 @@
 
 import { useRef, useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
+import { getKeypadKeyHeight, saveKeypadKeyHeight } from '@/lib/storage';
 import { AMOUNT_WINDOW_DAYS, MAX_NOTE_LENGTH, getFrequentNotes, getFrequentValues } from '@/lib/suggestions';
 import { appendKey, backspace, evaluate, hasOperator } from '@/lib/calculator';
 
 const MAX_FREQUENT_AMOUNTS = 4;
 const MAX_NOTE_SUGGESTIONS = 6;
+
+// Key height (px) is adjustable via the resize handle; the grid still shrinks to fit small screens
+const DEFAULT_KEY_HEIGHT = 54;
+const MIN_KEY_HEIGHT = 40;
+const MAX_KEY_HEIGHT = 96;
+const KEY_ROWS = 5;
+const KEY_GAP = 8;
+const clampKeyHeight = (height: number) => Math.min(MAX_KEY_HEIGHT, Math.max(MIN_KEY_HEIGHT, height));
 
 const formatYen = (value: number) => `¥${value.toLocaleString()}`;
 
@@ -27,6 +36,9 @@ export default function Keypad() {
   const { budgetData, expenseHistory, incomeHistory, addExpense, addIncome } = useBudget();
   const [expression, setExpression] = useState('');
   const [note, setNote] = useState('');
+  const [keyHeight, setKeyHeight] = useState(() => getKeypadKeyHeight() ?? DEFAULT_KEY_HEIGHT);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ startY: number; startHeight: number; previousKeyHeight: number } | null>(null);
   const [isNoteFocused, setIsNoteFocused] = useState(false);
   const noteInputRef = useRef<HTMLInputElement>(null);
 
@@ -67,6 +79,51 @@ export default function Keypad() {
     setNote('');
   };
 
+  // Height actually rendered, which can be less than requested when the screen is short
+  const measureKeyHeight = () => {
+    const grid = gridRef.current;
+    return grid ? (grid.clientHeight - KEY_GAP * (KEY_ROWS - 1)) / KEY_ROWS : keyHeight;
+  };
+
+  const commitKeyHeight = (height: number) => {
+    const rounded = Math.round(clampKeyHeight(height));
+    setKeyHeight(rounded);
+    saveKeypadKeyHeight(rounded === DEFAULT_KEY_HEIGHT ? null : rounded);
+  };
+
+  const handleResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { startY: e.clientY, startHeight: measureKeyHeight(), previousKeyHeight: keyHeight };
+  };
+
+  // The keypad is anchored to the bottom, so dragging up by N px grows the grid by N px
+  const handleResizeMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    setKeyHeight(clampKeyHeight(drag.startHeight + (drag.startY - e.clientY) / KEY_ROWS));
+  };
+
+  // Save what fits on screen rather than an unreachable requested height
+  const handleResizeEnd = () => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    dragRef.current = null;
+    const rendered = measureKeyHeight();
+    // No visible change (e.g. no spare room): keep the previous preference untouched
+    if (Math.round(rendered) === Math.round(drag.startHeight)) {
+      setKeyHeight(drag.previousKeyHeight);
+      return;
+    }
+    commitKeyHeight(rendered);
+  };
+
+  const handleResizeKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      commitKeyHeight(measureKeyHeight() + (e.key === 'ArrowUp' ? 2 : -2));
+    }
+  };
+
   const handleNoteSuggestion = (value: string) => {
     setNote(value);
     noteInputRef.current?.blur();
@@ -78,14 +135,33 @@ export default function Keypad() {
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={`h-10 rounded-lg text-xl font-medium shadow-sm active:scale-95 transition ${KEY_STYLES[style]} ${extraClass}`}
+      className={`h-full min-h-10 rounded-lg text-xl font-medium shadow-sm active:scale-95 transition ${KEY_STYLES[style]} ${extraClass}`}
     >
       {label}
     </button>
   );
 
   return (
-    <div className="space-y-2">
+    <div className="flex-1 flex flex-col justify-end gap-2">
+      {/* Resize handle: drag to change key height, double-tap to reset */}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize keypad"
+        aria-valuemin={MIN_KEY_HEIGHT}
+        aria-valuemax={MAX_KEY_HEIGHT}
+        aria-valuenow={Math.round(keyHeight)}
+        tabIndex={0}
+        onPointerDown={handleResizeStart}
+        onPointerMove={handleResizeMove}
+        onPointerUp={handleResizeEnd}
+        onPointerCancel={handleResizeEnd}
+        onDoubleClick={() => commitKeyHeight(DEFAULT_KEY_HEIGHT)}
+        onKeyDown={handleResizeKey}
+        className="relative h-4 -mb-2 flex items-center justify-center cursor-ns-resize touch-none select-none before:absolute before:inset-x-0 before:-inset-y-2 focus:outline-none group"
+      >
+        <div className="w-10 h-1 rounded-full bg-gray-300 group-hover:bg-gray-400 group-focus-visible:bg-blue-500 transition-colors" />
+      </div>
       {/* Display */}
       <div className="bg-surface rounded-xl shadow-sm px-4 py-1.5 text-right">
         <input
@@ -141,8 +217,12 @@ export default function Keypad() {
         </div>
       )}
 
-      {/* Keys */}
-      <div className="grid grid-cols-4 gap-2">
+      {/* Keys: rows share the spare height, up to the chosen key height */}
+      <div
+        ref={gridRef}
+        className="flex-1 min-h-58 grid grid-cols-4 grid-rows-5 gap-2"
+        style={{ maxHeight: keyHeight * KEY_ROWS + KEY_GAP * (KEY_ROWS - 1) }}
+      >
         {renderKey('÷', () => press('÷'), 'operator')}
         {renderKey('×', () => press('×'), 'operator')}
         {renderKey('C', () => setExpression(''), 'action', '', 'Clear')}
@@ -152,7 +232,7 @@ export default function Keypad() {
         {['4', '5', '6'].map(d => renderKey(d, () => press(d), 'digit'))}
         {renderKey('+', () => press('+'), 'operator', '', 'Plus')}
         {['1', '2', '3'].map(d => renderKey(d, () => press(d), 'digit'))}
-        {renderKey('=', handleEquals, 'equals', 'row-span-2 h-auto', 'Equals')}
+        {renderKey('=', handleEquals, 'equals', 'row-span-2', 'Equals')}
         {renderKey('0', () => press('0'), 'digit', 'col-span-2')}
         {renderKey('00', () => press('00'), 'digit')}
       </div>

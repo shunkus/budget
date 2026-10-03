@@ -173,8 +173,8 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Transaction Input: pinned to the bottom for one-handed use */}
-        <div className="mt-auto pt-4">
+        {/* Transaction Input: pinned to the bottom; its resize handle sits in the top gap */}
+        <div className="flex-1 flex flex-col">
           <Keypad />
         </div>
       </main>

@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   EXPENSE_HISTORY: 'budget_expense_history',
   INCOME_HISTORY: 'budget_income_history',
   SUBSCRIPTIONS: 'budget_subscriptions',
+  KEYPAD_KEY_HEIGHT: 'budget_keypad_key_height',
 } as const;
 
 // Transaction history types
@@ -49,6 +50,22 @@ export function getIsLoggedIn(): boolean {
 export function setIsLoggedIn(value: boolean): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEYS.IS_LOGGED_IN, String(value));
+}
+
+// Keypad preference: key height in px chosen by dragging the resize handle
+export function getKeypadKeyHeight(): number | null {
+  if (typeof window === 'undefined') return null;
+  const stored = Number(localStorage.getItem(STORAGE_KEYS.KEYPAD_KEY_HEIGHT));
+  return stored > 0 ? stored : null;
+}
+
+export function saveKeypadKeyHeight(height: number | null): void {
+  if (typeof window === 'undefined') return;
+  if (height === null) {
+    localStorage.removeItem(STORAGE_KEYS.KEYPAD_KEY_HEIGHT);
+  } else {
+    localStorage.setItem(STORAGE_KEYS.KEYPAD_KEY_HEIGHT, String(height));
+  }
 }
 
 // Budget functions
