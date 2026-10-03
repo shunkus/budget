@@ -17,6 +17,7 @@ interface TransactionItem {
   timestamp: number;
   type: 'expense' | 'income';
   isDaily?: boolean;
+  isSubscription?: boolean;
 }
 
 export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryModalProps) {
@@ -180,10 +181,15 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
                               Daily
                             </span>
                           )}
+                          {record.isSubscription && (
+                            <span className="ml-2 text-xs font-normal text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded">
+                              Subscriptions
+                            </span>
+                          )}
                         </p>
                         <p className="text-xs text-gray-400">{formatTime(record.timestamp)}</p>
                       </div>
-                      {!record.isDaily && (
+                      {!record.isDaily && !record.isSubscription && (
                         <button
                           onClick={() => handleDelete(record)}
                           className="text-gray-500 hover:text-gray-700 text-sm"

@@ -6,11 +6,14 @@ import SettingsModal from './SettingsModal';
 import ExpenseInput from './ExpenseInput';
 import IncomeInput from './IncomeInput';
 import ExpenseHistoryModal from './ExpenseHistoryModal';
+import SubscriptionsModal from './SubscriptionsModal';
+import { getDailySubscriptionTotal } from '@/lib/storage';
 
 export default function Dashboard() {
-  const { budgetData, isLoading, updateCurrentBudget } = useBudget();
+  const { budgetData, subscriptions, isLoading, updateCurrentBudget } = useBudget();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSubscriptionsOpen, setIsSubscriptionsOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
 
@@ -58,6 +61,26 @@ export default function Dashboard() {
         <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-xl font-bold text-gray-800">Budget Manager</h1>
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setIsSubscriptionsOpen(true)}
+              className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label="Subscriptions"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
             <button
               onClick={() => setIsHistoryOpen(true)}
               className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
@@ -137,6 +160,14 @@ export default function Dashboard() {
           <p className="text-sm text-gray-400 mt-4">
             Daily: {formatCurrency(budgetData.dailyBudget)} / day
           </p>
+          {subscriptions.length > 0 && (
+            <p
+              className="text-sm text-purple-400 mt-1 cursor-pointer hover:text-purple-600 transition-colors"
+              onClick={() => setIsSubscriptionsOpen(true)}
+            >
+              Subscriptions: -{formatCurrency(getDailySubscriptionTotal(subscriptions))} / day
+            </p>
+          )}
           <p className="text-xs text-gray-300 mt-2">
             Last updated: {budgetData.lastUpdateDate}
           </p>
@@ -157,6 +188,9 @@ export default function Dashboard() {
 
       {/* Settings Modal */}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
+      {/* Subscriptions Modal */}
+      <SubscriptionsModal isOpen={isSubscriptionsOpen} onClose={() => setIsSubscriptionsOpen(false)} />
 
       {/* Expense History Modal */}
       <ExpenseHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} />

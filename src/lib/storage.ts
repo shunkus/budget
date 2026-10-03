@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   LAST_UPDATE_DATE: 'budget_last_update',
   EXPENSE_HISTORY: 'budget_expense_history',
   INCOME_HISTORY: 'budget_income_history',
+  SUBSCRIPTIONS: 'budget_subscriptions',
 } as const;
 
 // Transaction history types
@@ -15,11 +16,22 @@ export interface TransactionRecord {
   date: string; // ISO date string (YYYY-MM-DD)
   timestamp: number; // Unix timestamp for sorting
   isDaily?: boolean; // true if this is a daily budget addition
+  isSubscription?: boolean; // true if this is a daily subscription deduction
 }
 
 // Alias for backward compatibility
 export type ExpenseRecord = TransactionRecord;
 export type IncomeRecord = TransactionRecord;
+
+export type BillingCycle = 'monthly' | 'yearly';
+
+export interface Subscription {
+  id: string;
+  title: string;
+  amount: number;
+  cycle: BillingCycle;
+  createdAt: number;
+}
 
 export interface BudgetData {
   currentBudget: number;
@@ -91,16 +103,21 @@ export function calculateAndUpdateBudget(): BudgetData {
 
   if (data.lastUpdateDate !== today) {
     const daysPassed = getDaysDifference(data.lastUpdateDate, today);
-    if (daysPassed > 0 && data.dailyBudget > 0) {
-      const addedBudget = daysPassed * data.dailyBudget;
-      data.currentBudget += addedBudget;
-      data.lastUpdateDate = today;
-      saveBudgetData(data);
+    if (daysPassed > 0) {
+      if (data.dailyBudget > 0) {
+        const addedBudget = daysPassed * data.dailyBudget;
+        data.currentBudget += addedBudget;
+        // Record daily budget addition to income history
+        addDailyBudgetToHistory(addedBudget);
+      }
 
-      // Record daily budget addition to income history
-      addDailyBudgetToHistory(addedBudget);
-    } else if (daysPassed > 0) {
-      // Update date even if daily budget is 0
+      const subscriptionCost = Math.round(daysPassed * getDailySubscriptionTotal());
+      if (subscriptionCost > 0) {
+        data.currentBudget -= subscriptionCost;
+        // Record subscription deduction to expense history
+        addSubscriptionCostToHistory(subscriptionCost);
+      }
+
       data.lastUpdateDate = today;
       saveBudgetData(data);
     }
@@ -133,6 +150,25 @@ function addDailyBudgetToHistory(totalAmount: number): void {
   const filteredHistory = history.filter(r => r.timestamp >= cutoffTimestamp);
 
   localStorage.setItem(STORAGE_KEYS.INCOME_HISTORY, JSON.stringify(filteredHistory));
+}
+
+// Add daily subscription deduction to expense history
+function addSubscriptionCostToHistory(totalAmount: number): void {
+  if (typeof window === 'undefined') return;
+
+  const history = getExpenseHistory();
+  const now = new Date();
+
+  const record: ExpenseRecord = {
+    id: `sub-${now.getTime()}-${Math.random().toString(36).substring(2, 11)}`,
+    amount: totalAmount,
+    date: getTodayDateString(),
+    timestamp: now.getTime(),
+    isSubscription: true,
+  };
+
+  history.push(record);
+  localStorage.setItem(STORAGE_KEYS.EXPENSE_HISTORY, JSON.stringify(history));
 }
 
 // Expense history functions
@@ -235,4 +271,51 @@ export function deleteIncomeRecord(id: string): void {
   const history = getIncomeHistory();
   const filteredHistory = history.filter(r => r.id !== id);
   localStorage.setItem(STORAGE_KEYS.INCOME_HISTORY, JSON.stringify(filteredHistory));
+}
+
+// Subscription functions
+export function getSubscriptions(): Subscription[] {
+  if (typeof window === 'undefined') return [];
+
+  const stored = localStorage.getItem(STORAGE_KEYS.SUBSCRIPTIONS);
+  if (!stored) return [];
+
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+export function addSubscriptionRecord(title: string, amount: number, cycle: BillingCycle): Subscription {
+  const subscriptions = getSubscriptions();
+  const now = Date.now();
+
+  const subscription: Subscription = {
+    id: `${now}-${Math.random().toString(36).substring(2, 11)}`,
+    title,
+    amount,
+    cycle,
+    createdAt: now,
+  };
+
+  subscriptions.push(subscription);
+  localStorage.setItem(STORAGE_KEYS.SUBSCRIPTIONS, JSON.stringify(subscriptions));
+
+  return subscription;
+}
+
+export function deleteSubscriptionRecord(id: string): void {
+  const subscriptions = getSubscriptions().filter(s => s.id !== id);
+  localStorage.setItem(STORAGE_KEYS.SUBSCRIPTIONS, JSON.stringify(subscriptions));
+}
+
+// Daily cost of a subscription (monthly is annualized to avoid month-length bias)
+export function getDailyCost(subscription: Subscription): number {
+  const yearlyAmount = subscription.cycle === 'monthly' ? subscription.amount * 12 : subscription.amount;
+  return yearlyAmount / 365;
+}
+
+export function getDailySubscriptionTotal(subscriptions: Subscription[] = getSubscriptions()): number {
+  return subscriptions.reduce((sum, s) => sum + getDailyCost(s), 0);
 }

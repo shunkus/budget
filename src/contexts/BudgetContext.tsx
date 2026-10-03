@@ -1,12 +1,13 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { BudgetData, ExpenseRecord, IncomeRecord, getBudgetData, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord, getIncomeHistory, addIncomeRecord, deleteIncomeRecord } from '@/lib/storage';
+import { BudgetData, BillingCycle, ExpenseRecord, IncomeRecord, Subscription, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord, getIncomeHistory, addIncomeRecord, deleteIncomeRecord, getSubscriptions, addSubscriptionRecord, deleteSubscriptionRecord } from '@/lib/storage';
 
 interface BudgetContextType {
   budgetData: BudgetData;
   expenseHistory: ExpenseRecord[];
   incomeHistory: IncomeRecord[];
+  subscriptions: Subscription[];
   isLoading: boolean;
   updateDailyBudget: (amount: number) => void;
   updateCurrentBudget: (amount: number) => void;
@@ -15,6 +16,8 @@ interface BudgetContextType {
   removeExpense: (id: string, amount: number) => void;
   addIncome: (amount: number) => void;
   removeIncome: (id: string, amount: number) => void;
+  addSubscription: (title: string, amount: number, cycle: BillingCycle) => void;
+  removeSubscription: (id: string) => void;
   refreshBudget: () => void;
 }
 
@@ -28,6 +31,7 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
   });
   const [expenseHistory, setExpenseHistory] = useState<ExpenseRecord[]>([]);
   const [incomeHistory, setIncomeHistory] = useState<IncomeRecord[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshBudget = useCallback(() => {
@@ -35,6 +39,7 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     setBudgetData(updatedData);
     setExpenseHistory(getExpenseHistory());
     setIncomeHistory(getIncomeHistory());
+    setSubscriptions(getSubscriptions());
   }, []);
 
   useEffect(() => {
@@ -104,9 +109,19 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     setBudgetData(newData);
   };
 
+  const addSubscription = (title: string, amount: number, cycle: BillingCycle) => {
+    const subscription = addSubscriptionRecord(title, amount, cycle);
+    setSubscriptions(prev => [...prev, subscription]);
+  };
+
+  const removeSubscription = (id: string) => {
+    deleteSubscriptionRecord(id);
+    setSubscriptions(prev => prev.filter(s => s.id !== id));
+  };
+
   return (
     <BudgetContext.Provider
-      value={{ budgetData, expenseHistory, incomeHistory, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, addExpense, removeExpense, addIncome, removeIncome, refreshBudget }}
+      value={{ budgetData, expenseHistory, incomeHistory, subscriptions, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, addExpense, removeExpense, addIncome, removeIncome, addSubscription, removeSubscription, refreshBudget }}
     >
       {children}
     </BudgetContext.Provider>
