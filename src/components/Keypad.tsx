@@ -143,10 +143,10 @@ export default function Keypad() {
 
       {/* Keys */}
       <div className="grid grid-cols-4 gap-2">
-        {renderKey('C', () => setExpression(''), 'action', '', 'Clear')}
-        {renderKey('⌫', () => setExpression(prev => backspace(prev)), 'action', '', 'Backspace')}
         {renderKey('÷', () => press('÷'), 'operator')}
         {renderKey('×', () => press('×'), 'operator')}
+        {renderKey('C', () => setExpression(''), 'action', '', 'Clear')}
+        {renderKey('⌫', () => setExpression(prev => backspace(prev)), 'action', '', 'Backspace')}
         {['7', '8', '9'].map(d => renderKey(d, () => press(d), 'digit'))}
         {renderKey('−', () => press('-'), 'operator', '', 'Minus')}
         {['4', '5', '6'].map(d => renderKey(d, () => press(d), 'digit'))}
