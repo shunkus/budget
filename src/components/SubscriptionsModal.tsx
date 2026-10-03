@@ -89,7 +89,7 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90dvh] flex flex-col">
+      <div className="bg-surface rounded-lg p-6 w-full max-w-md mx-4 max-h-[90dvh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-gray-800">Subscriptions</h2>
           <button
@@ -131,7 +131,7 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
             <select
               value={cycle}
               onChange={(e) => setCycle(e.target.value as BillingCycle)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-800 bg-white"
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-800 bg-surface"
             >
               <option value="monthly">Monthly</option>
               <option value="yearly">Yearly</option>
@@ -212,7 +212,7 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value as SortOrder)}
                 aria-label="Sort order"
-                className="px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-800 bg-white text-sm"
+                className="px-2 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-800 bg-surface text-sm"
               >
                 {SORT_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -227,7 +227,7 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
                   className={`flex-1 py-1.5 transition-colors ${
                     cycleFilter === value
                       ? 'bg-purple-500 text-white'
-                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                      : 'bg-surface text-gray-600 hover:bg-gray-50'
                   }`}
                 >
                   {value === 'all' ? 'All' : value === 'monthly' ? 'Monthly' : 'Yearly'}

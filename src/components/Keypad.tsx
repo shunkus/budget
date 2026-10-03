@@ -30,7 +30,7 @@ const formatExpression = (expression: string) =>
 type KeyStyle = 'digit' | 'operator' | 'action' | 'equals';
 
 const KEY_STYLES: Record<KeyStyle, string> = {
-  digit: 'bg-white text-gray-800 hover:bg-gray-50',
+  digit: 'bg-surface text-gray-800 hover:bg-gray-50',
   operator: 'bg-gray-100 text-blue-600 hover:bg-gray-200',
   action: 'bg-gray-100 text-gray-600 hover:bg-gray-200',
   equals: 'bg-blue-500 text-white hover:bg-blue-600',
@@ -81,7 +81,7 @@ export default function Keypad() {
   return (
     <div className="space-y-2">
       {/* Display */}
-      <div className="bg-white rounded-xl shadow-sm px-4 py-2 text-right">
+      <div className="bg-surface rounded-xl shadow-sm px-4 py-2 text-right">
         <p className="text-2xl font-bold text-gray-800 truncate min-h-8">
           {expression ? `¥${formatExpression(expression)}` : <span className="text-gray-300">¥0</span>}
         </p>
@@ -99,7 +99,7 @@ export default function Keypad() {
               key={value}
               type="button"
               onClick={() => handleFrequentAmount(value)}
-              className="shrink-0 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-sm text-gray-700 hover:bg-gray-50 active:scale-95 transition"
+              className="shrink-0 px-3 py-1.5 bg-surface border border-gray-200 rounded-full text-sm text-gray-700 hover:bg-gray-50 active:scale-95 transition"
             >
               {formatYen(value)}
             </button>

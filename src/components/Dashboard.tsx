@@ -56,7 +56,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      <header className="bg-surface shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-xl font-bold text-gray-800">Budget Manager</h1>
           <div className="flex items-center space-x-3">
@@ -132,8 +132,11 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-md mx-auto px-4 py-3">
-        <div className="bg-white rounded-2xl shadow-lg px-6 py-4 text-center">
-          <p className="text-sm text-gray-500 mb-1">Current Budget</p>
+        <div className="bg-surface rounded-2xl shadow-lg px-6 py-4 text-center">
+          <p className="text-sm text-gray-500 mb-1">
+            Current Budget
+            <span className="text-xs text-gray-300 ml-2">Updated {budgetData.lastUpdateDate}</span>
+          </p>
           {isEditing ? (
             <div className="flex items-center justify-center">
               <span className="text-3xl font-bold text-gray-800 mr-2">¥</span>
@@ -158,16 +161,16 @@ export default function Dashboard() {
           )}
           <p className="text-sm text-gray-400 mt-2">
             Daily: {formatCurrency(budgetData.dailyBudget)} / day
-            <span className="text-xs text-gray-300 ml-2">Updated {budgetData.lastUpdateDate}</span>
+            {subscriptions.length > 0 && (
+              <button
+                type="button"
+                className="ml-3 text-purple-400 hover:text-purple-600 transition-colors"
+                onClick={() => setIsSubscriptionsOpen(true)}
+              >
+                Subs: -{formatCurrency(getDailySubscriptionTotal(subscriptions))} / day
+              </button>
+            )}
           </p>
-          {subscriptions.length > 0 && (
-            <p
-              className="text-sm text-purple-400 mt-1 cursor-pointer hover:text-purple-600 transition-colors"
-              onClick={() => setIsSubscriptionsOpen(true)}
-            >
-              Subscriptions: -{formatCurrency(getDailySubscriptionTotal(subscriptions))} / day
-            </p>
-          )}
         </div>
 
         {/* Transaction Input */}

@@ -3,6 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { ThemePreference, getThemePreference, setThemePreference } from '@/lib/theme';
+
+const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -16,6 +23,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [lastUpdate, setLastUpdate] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [theme, setTheme] = useState<ThemePreference>(getThemePreference);
 
   useEffect(() => {
     if (isOpen) {
@@ -43,11 +51,17 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     onClose();
   };
 
+  // Theme is applied immediately, independent of Save/Cancel
+  const handleThemeChange = (preference: ThemePreference) => {
+    setTheme(preference);
+    setThemePreference(preference);
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+      <div className="bg-surface rounded-lg p-6 w-full max-w-md mx-4">
         <h2 className="text-xl font-bold mb-4 text-gray-800">Settings</h2>
         <div className="mb-4">
           <label htmlFor="dailyBudget" className="block text-sm font-medium text-gray-700 mb-2">
@@ -77,11 +91,35 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             id="lastUpdate"
             value={lastUpdate}
             onChange={(e) => setLastUpdate(e.target.value)}
-            className="block w-full min-w-0 appearance-none bg-white px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
+            className="block w-full min-w-0 appearance-none bg-surface px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
           />
           <p className="text-sm text-gray-500 mt-1">
             Daily budget is calculated from this date.
           </p>
+        </div>
+
+        {/* Appearance Section */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Appearance
+          </label>
+          <div className="flex rounded-md border border-gray-300 overflow-hidden text-sm">
+            {THEME_OPTIONS.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => handleThemeChange(option.value)}
+                aria-pressed={theme === option.value}
+                className={`flex-1 py-2 transition-colors ${
+                  theme === option.value
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-surface text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Reset Budget Section */}
