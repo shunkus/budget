@@ -17,6 +17,7 @@ export interface TransactionRecord {
   timestamp: number; // Unix timestamp for sorting
   isDaily?: boolean; // true if this is a daily budget addition
   isSubscription?: boolean; // true if this is a daily subscription deduction
+  note?: string; // optional free-text memo
 }
 
 // Alias for backward compatibility
@@ -87,6 +88,13 @@ export function getTodayDateString(): string {
   return jstDate.toISOString().split('T')[0];
 }
 
+// Date string (YYYY-MM-DD, JST) for the given number of days before today
+export function getDateStringDaysAgo(days: number): string {
+  const today = new Date(getTodayDateString() + 'T00:00:00Z');
+  today.setUTCDate(today.getUTCDate() - days);
+  return today.toISOString().split('T')[0];
+}
+
 export function getDaysDifference(fromDate: string, toDate: string): number {
   // Parse dates as JST midnight
   const from = new Date(fromDate + 'T00:00:00+09:00');
@@ -143,7 +151,7 @@ function addDailyBudgetToHistory(totalAmount: number): void {
 
   history.push(record);
 
-  // Clean up old records (older than 7 days)
+  // Clean up records older than the retention period
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - DAYS_TO_KEEP);
   const cutoffTimestamp = cutoffDate.getTime();
@@ -172,7 +180,8 @@ function addSubscriptionCostToHistory(totalAmount: number): void {
 }
 
 // Expense history functions
-const DAYS_TO_KEEP = 7;
+// About 3 years of history (localStorage holds roughly 5MB; ~120 bytes per record)
+const DAYS_TO_KEEP = 365 * 3;
 
 export function getExpenseHistory(): ExpenseRecord[] {
   if (typeof window === 'undefined') return [];
@@ -182,7 +191,7 @@ export function getExpenseHistory(): ExpenseRecord[] {
 
   try {
     const history: ExpenseRecord[] = JSON.parse(stored);
-    // Filter to keep only last 7 days
+    // Keep only records within the retention period
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - DAYS_TO_KEEP);
     const cutoffTimestamp = cutoffDate.getTime();
@@ -193,7 +202,7 @@ export function getExpenseHistory(): ExpenseRecord[] {
   }
 }
 
-export function addExpenseRecord(amount: number): ExpenseRecord {
+export function addExpenseRecord(amount: number, note?: string): ExpenseRecord {
   const history = getExpenseHistory();
   const now = new Date();
 
@@ -202,11 +211,12 @@ export function addExpenseRecord(amount: number): ExpenseRecord {
     amount,
     date: getTodayDateString(),
     timestamp: now.getTime(),
+    ...(note ? { note } : {}),
   };
 
   history.push(record);
 
-  // Clean up old records (older than 7 days)
+  // Clean up records older than the retention period
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - DAYS_TO_KEEP);
   const cutoffTimestamp = cutoffDate.getTime();
@@ -232,7 +242,7 @@ export function getIncomeHistory(): IncomeRecord[] {
 
   try {
     const history: IncomeRecord[] = JSON.parse(stored);
-    // Filter to keep only last 7 days
+    // Keep only records within the retention period
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - DAYS_TO_KEEP);
     const cutoffTimestamp = cutoffDate.getTime();
@@ -243,7 +253,7 @@ export function getIncomeHistory(): IncomeRecord[] {
   }
 }
 
-export function addIncomeRecord(amount: number): IncomeRecord {
+export function addIncomeRecord(amount: number, note?: string): IncomeRecord {
   const history = getIncomeHistory();
   const now = new Date();
 
@@ -252,11 +262,12 @@ export function addIncomeRecord(amount: number): IncomeRecord {
     amount,
     date: getTodayDateString(),
     timestamp: now.getTime(),
+    ...(note ? { note } : {}),
   };
 
   history.push(record);
 
-  // Clean up old records (older than 7 days)
+  // Clean up records older than the retention period
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - DAYS_TO_KEEP);
   const cutoffTimestamp = cutoffDate.getTime();

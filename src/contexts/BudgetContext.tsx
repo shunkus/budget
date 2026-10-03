@@ -12,9 +12,9 @@ interface BudgetContextType {
   updateDailyBudget: (amount: number) => void;
   updateCurrentBudget: (amount: number) => void;
   updateLastUpdateDate: (date: string) => void;
-  addExpense: (amount: number) => void;
+  addExpense: (amount: number, note?: string) => void;
   removeExpense: (id: string, amount: number) => void;
-  addIncome: (amount: number) => void;
+  addIncome: (amount: number, note?: string) => void;
   removeIncome: (id: string, amount: number) => void;
   addSubscription: (title: string, amount: number, cycle: BillingCycle) => void;
   removeSubscription: (id: string) => void;
@@ -65,9 +65,9 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     setBudgetData(newData);
   };
 
-  const addExpense = (amount: number) => {
+  const addExpense = (amount: number, note?: string) => {
     // Add to history
-    const record = addExpenseRecord(amount);
+    const record = addExpenseRecord(amount, note);
     setExpenseHistory(prev => [...prev, record]);
     // Deduct from budget
     const newBudget = budgetData.currentBudget - amount;
@@ -87,9 +87,9 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     setBudgetData(newData);
   };
 
-  const addIncome = (amount: number) => {
+  const addIncome = (amount: number, note?: string) => {
     // Add to history
-    const record = addIncomeRecord(amount);
+    const record = addIncomeRecord(amount, note);
     setIncomeHistory(prev => [...prev, record]);
     // Add to budget
     const newBudget = budgetData.currentBudget + amount;

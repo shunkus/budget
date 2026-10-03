@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
+import { getDateStringDaysAgo, getTodayDateString } from '@/lib/storage';
 
 interface ExpenseHistoryModalProps {
   isOpen: boolean;
@@ -9,6 +10,14 @@ interface ExpenseHistoryModalProps {
 }
 
 type TabType = 'all' | 'expense' | 'income';
+type PeriodType = '7d' | '30d' | '1y' | 'all';
+
+const PERIOD_OPTIONS: { value: PeriodType; label: string; days: number | null }[] = [
+  { value: '7d', label: '7 days', days: 7 },
+  { value: '30d', label: '30 days', days: 30 },
+  { value: '1y', label: '1 year', days: 365 },
+  { value: 'all', label: 'All time', days: null },
+];
 
 interface TransactionItem {
   id: string;
@@ -18,19 +27,27 @@ interface TransactionItem {
   type: 'expense' | 'income';
   isDaily?: boolean;
   isSubscription?: boolean;
+  note?: string;
 }
 
 export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryModalProps) {
   const { expenseHistory, incomeHistory, removeExpense, removeIncome } = useBudget();
   const [activeTab, setActiveTab] = useState<TabType>('all');
+  const [period, setPeriod] = useState<PeriodType>('7d');
 
   if (!isOpen) return null;
 
-  // Combine and sort all transactions
+  // Calendar days in JST, including today
+  const periodDays = PERIOD_OPTIONS.find(p => p.value === period)?.days ?? null;
+  const periodStart = periodDays === null ? null : getDateStringDaysAgo(periodDays - 1);
+
+  // Combine and sort all transactions within the selected period
   const allTransactions: TransactionItem[] = [
     ...expenseHistory.map(r => ({ ...r, type: 'expense' as const, isDaily: false })),
     ...incomeHistory.map(r => ({ ...r, type: 'income' as const })),
-  ].sort((a, b) => b.timestamp - a.timestamp);
+  ]
+    .filter(r => periodStart === null || r.date >= periodStart)
+    .sort((a, b) => b.timestamp - a.timestamp);
 
   // Filter based on active tab
   const filteredTransactions = activeTab === 'all'
@@ -58,26 +75,31 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
     return `${sign}¥${Math.abs(amount).toLocaleString()}`;
   };
 
-  const totalExpense = expenseHistory.reduce((sum, record) => sum + record.amount, 0);
-  const totalIncome = incomeHistory.reduce((sum, record) => sum + record.amount, 0);
+  const sumOf = (type: TransactionItem['type']) =>
+    allTransactions.filter(r => r.type === type).reduce((sum, record) => sum + record.amount, 0);
+  const totalExpense = sumOf('expense');
+  const totalIncome = sumOf('income');
+  const totalNet = totalIncome - totalExpense;
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Record dates are JST date strings, so compare against JST today/yesterday
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString + 'T00:00:00');
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+    const today = getTodayDateString();
+    if (dateString === today) return 'Today';
+    if (dateString === getDateStringDaysAgo(1)) return 'Yesterday';
 
-    if (dateString === today.toISOString().split('T')[0]) {
-      return 'Today';
-    } else if (dateString === yesterday.toISOString().split('T')[0]) {
-      return 'Yesterday';
-    }
-    return date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+    const date = new Date(dateString + 'T00:00:00Z');
+    const isThisYear = dateString.slice(0, 4) === today.slice(0, 4);
+    return date.toLocaleDateString('ja-JP', {
+      timeZone: 'UTC',
+      ...(isThisYear ? {} : { year: 'numeric' }),
+      month: 'short',
+      day: 'numeric',
+    });
   };
 
   const handleDelete = (record: TransactionItem) => {
@@ -90,8 +112,8 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-surface rounded-lg p-6 w-full max-w-md mx-4 max-h-[80vh] flex flex-col">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-surface rounded-lg p-6 w-full max-w-md mx-4 max-h-[90dvh] flex flex-col">
+        <div className="flex justify-between items-center mb-4 shrink-0">
           <h2 className="text-xl font-bold text-gray-800">Transaction History</h2>
           <button
             onClick={onClose}
@@ -103,20 +125,47 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
           </button>
         </div>
 
+        {/* Period */}
+        <div className="mb-3 shrink-0 flex rounded-md border border-gray-300 overflow-hidden text-sm">
+          {PERIOD_OPTIONS.map(option => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setPeriod(option.value)}
+              aria-pressed={period === option.value}
+              className={`flex-1 py-1.5 transition-colors ${
+                period === option.value
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-surface text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
         {/* Summary */}
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          <div className="p-3 bg-red-50 rounded-lg">
-            <p className="text-sm text-red-600">Expenses</p>
-            <p className="text-xl font-bold text-red-700">-¥{totalExpense.toLocaleString()}</p>
+        <div className="mb-4 shrink-0 grid grid-cols-3 gap-2">
+          <div className="p-2 bg-red-50 rounded-lg min-w-0">
+            <p className="text-xs text-red-600">Expenses</p>
+            <p className="text-sm sm:text-base font-bold text-red-700 whitespace-nowrap">-¥{totalExpense.toLocaleString()}</p>
           </div>
-          <div className="p-3 bg-green-50 rounded-lg">
-            <p className="text-sm text-green-600">Income</p>
-            <p className="text-xl font-bold text-green-700">+¥{totalIncome.toLocaleString()}</p>
+          <div className="p-2 bg-green-50 rounded-lg min-w-0">
+            <p className="text-xs text-green-600">Income</p>
+            <p className="text-sm sm:text-base font-bold text-green-700 whitespace-nowrap">+¥{totalIncome.toLocaleString()}</p>
+          </div>
+          <div className="p-2 bg-gray-100 rounded-lg min-w-0">
+            <p className="text-xs text-gray-600">Net</p>
+            <p className={`text-sm sm:text-base font-bold whitespace-nowrap ${
+              totalNet > 0 ? 'text-green-700' : totalNet < 0 ? 'text-red-700' : 'text-gray-600'
+            }`}>
+              {formatSigned(totalNet)}
+            </p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex mb-4 border-b border-gray-200">
+        <div className="flex mb-4 shrink-0 border-b border-gray-200">
           <button
             onClick={() => setActiveTab('all')}
             className={`flex-1 py-2 text-sm font-medium ${
@@ -171,7 +220,7 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
                         record.type === 'expense' ? 'bg-red-50' : 'bg-green-50'
                       }`}
                     >
-                      <div>
+                      <div className="min-w-0">
                         <p className={`font-medium ${
                           record.type === 'expense' ? 'text-red-700' : 'text-green-700'
                         }`}>
@@ -187,12 +236,15 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
                             </span>
                           )}
                         </p>
+                        {record.note && (
+                          <p className="text-sm text-gray-700 truncate">{record.note}</p>
+                        )}
                         <p className="text-xs text-gray-400">{formatTime(record.timestamp)}</p>
                       </div>
                       {!record.isDaily && !record.isSubscription && (
                         <button
                           onClick={() => handleDelete(record)}
-                          className="text-gray-500 hover:text-gray-700 text-sm"
+                          className="ml-2 shrink-0 text-gray-500 hover:text-gray-700 text-sm"
                           title={record.type === 'expense' ? 'Delete and restore to budget' : 'Delete and deduct from budget'}
                         >
                           Delete
@@ -206,7 +258,7 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
           )}
         </div>
 
-        <div className="mt-4 pt-4 border-t border-gray-200">
+        <div className="mt-4 pt-4 shrink-0 border-t border-gray-200">
           <button
             onClick={onClose}
             className="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"

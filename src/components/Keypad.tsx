@@ -1,24 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
-import { ExpenseRecord } from '@/lib/storage';
+import { TransactionRecord } from '@/lib/storage';
 import { appendKey, backspace, evaluate, hasOperator } from '@/lib/calculator';
 
 const MAX_FREQUENT_AMOUNTS = 4;
+const MAX_NOTE_SUGGESTIONS = 6;
+const MAX_NOTE_LENGTH = 50;
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Recent windows keep suggestions relevant now that history spans years
+const AMOUNT_WINDOW_DAYS = 30;
+const NOTE_WINDOW_DAYS = 90;
 
-// Most frequently used manual expense amounts, ties broken by most recent use
-function getFrequentAmounts(history: ExpenseRecord[]): number[] {
-  const stats = new Map<number, { count: number; lastUsed: number }>();
-  for (const record of history) {
-    if (record.isSubscription) continue;
-    const stat = stats.get(record.amount) ?? { count: 0, lastUsed: 0 };
-    stats.set(record.amount, { count: stat.count + 1, lastUsed: Math.max(stat.lastUsed, record.timestamp) });
+// Most frequent values among recent records, ties broken by most recent use
+function getFrequentValues<T>(records: TransactionRecord[], windowDays: number, pick: (r: TransactionRecord) => T | undefined): T[] {
+  const cutoff = Date.now() - windowDays * DAY_MS;
+  const stats = new Map<T, { count: number; lastUsed: number }>();
+  for (const record of records) {
+    const value = pick(record);
+    if (record.timestamp < cutoff || value === undefined) continue;
+    const stat = stats.get(value) ?? { count: 0, lastUsed: 0 };
+    stats.set(value, { count: stat.count + 1, lastUsed: Math.max(stat.lastUsed, record.timestamp) });
   }
   return [...stats.entries()]
     .sort(([, a], [, b]) => b.count - a.count || b.lastUsed - a.lastUsed)
-    .slice(0, MAX_FREQUENT_AMOUNTS)
-    .map(([amount]) => amount);
+    .map(([value]) => value);
 }
 
 const formatYen = (value: number) => `¥${value.toLocaleString()}`;
@@ -37,13 +44,25 @@ const KEY_STYLES: Record<KeyStyle, string> = {
 };
 
 export default function Keypad() {
-  const { budgetData, expenseHistory, addExpense, addIncome } = useBudget();
+  const { budgetData, expenseHistory, incomeHistory, addExpense, addIncome } = useBudget();
   const [expression, setExpression] = useState('');
+  const [note, setNote] = useState('');
+  const [isNoteFocused, setIsNoteFocused] = useState(false);
+  const noteInputRef = useRef<HTMLInputElement>(null);
 
   const result = evaluate(expression);
   const amount = result === null ? 0 : Math.round(result);
   const canSubmit = amount > 0;
-  const frequentAmounts = getFrequentAmounts(expenseHistory);
+  const frequentAmounts = getFrequentValues(expenseHistory, AMOUNT_WINDOW_DAYS, r => (r.isSubscription ? undefined : r.amount))
+    .slice(0, MAX_FREQUENT_AMOUNTS);
+
+  const trimmedNote = note.trim();
+  const noteQuery = trimmedNote.toLowerCase();
+  const noteSuggestions = getFrequentValues([...expenseHistory, ...incomeHistory], NOTE_WINDOW_DAYS, r => r.note)
+    .filter(n => n !== trimmedNote && n.toLowerCase().includes(noteQuery))
+    .slice(0, MAX_NOTE_SUGGESTIONS);
+  // While typing a memo the OS keyboard covers the keypad, so the chip row offers memos instead
+  const showNoteSuggestions = isNoteFocused && noteSuggestions.length > 0;
 
   const press = (key: string) => setExpression(prev => appendKey(prev, key));
 
@@ -58,12 +77,19 @@ export default function Keypad() {
 
   const handleSubmit = (type: 'expense' | 'income') => {
     if (!canSubmit) return;
+    const memo = trimmedNote || undefined;
     if (type === 'expense') {
-      addExpense(amount);
+      addExpense(amount, memo);
     } else {
-      addIncome(amount);
+      addIncome(amount, memo);
     }
     setExpression('');
+    setNote('');
+  };
+
+  const handleNoteSuggestion = (value: string) => {
+    setNote(value);
+    noteInputRef.current?.blur();
   };
 
   const renderKey = (label: string, onClick: () => void, style: KeyStyle, extraClass = '', ariaLabel?: string) => (
@@ -72,7 +98,7 @@ export default function Keypad() {
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={`h-11 rounded-lg text-xl font-medium shadow-sm active:scale-95 transition ${KEY_STYLES[style]} ${extraClass}`}
+      className={`h-10 rounded-lg text-xl font-medium shadow-sm active:scale-95 transition ${KEY_STYLES[style]} ${extraClass}`}
     >
       {label}
     </button>
@@ -81,7 +107,20 @@ export default function Keypad() {
   return (
     <div className="space-y-2">
       {/* Display */}
-      <div className="bg-surface rounded-xl shadow-sm px-4 py-2 text-right">
+      <div className="bg-surface rounded-xl shadow-sm px-4 py-1.5 text-right">
+        <input
+          ref={noteInputRef}
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onFocus={() => setIsNoteFocused(true)}
+          onBlur={() => setIsNoteFocused(false)}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          maxLength={MAX_NOTE_LENGTH}
+          placeholder="Memo (optional)"
+          enterKeyHint="done"
+          className="w-full bg-transparent text-sm text-gray-700 placeholder:text-gray-300 border-b border-gray-200 pb-1 mb-0.5 focus:outline-none focus:border-blue-500"
+        />
         <p className="text-2xl font-bold text-gray-800 truncate min-h-8">
           {expression ? `¥${formatExpression(expression)}` : <span className="text-gray-300">¥0</span>}
         </p>
@@ -91,8 +130,23 @@ export default function Keypad() {
         </p>
       </div>
 
-      {/* Frequent amounts */}
-      {frequentAmounts.length > 0 && (
+      {/* Suggestions: memos while editing the memo, otherwise frequent amounts */}
+      {showNoteSuggestions ? (
+        <div className="flex gap-2 overflow-x-auto">
+          {noteSuggestions.map(value => (
+            <button
+              key={value}
+              type="button"
+              // Keep the input focused until the click lands
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => handleNoteSuggestion(value)}
+              className="shrink-0 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-sm text-blue-700 hover:bg-blue-100 active:scale-95 transition"
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+      ) : frequentAmounts.length > 0 && (
         <div className="flex gap-2 overflow-x-auto">
           {frequentAmounts.map(value => (
             <button
