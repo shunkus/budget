@@ -214,7 +214,13 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
 
   // Bulk TSV editing covers the manual records currently listed; daily/subscription rows are generated
   const editableRecords: TsvRecord[] = filteredTransactions.filter(r => !r.isDaily && !r.isSubscription);
-  const bulkResult = mode === 'bulk' ? parseTsvEdits(bulkText, editableRecords) : null;
+  // Pasted rows are matched against every record, so lists copied from another period or tab work too
+  const allTsvRecords: TsvRecord[] = [
+    ...expenseHistory.map(r => ({ ...r, type: 'expense' as const })),
+    ...incomeHistory.map(r => ({ ...r, type: 'income' as const })),
+  ];
+  // An empty box (e.g. after Clear) is waiting for a paste, not an error
+  const bulkResult = mode === 'bulk' && bulkText.trim() !== '' ? parseTsvEdits(bulkText, allTsvRecords) : null;
   const canApplyBulk = bulkResult !== null && bulkResult.errors.length === 0 && bulkResult.edits.length > 0;
 
   const openBulkEdit = () => {
@@ -511,7 +517,7 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
             <p className="text-xs text-gray-500">
               {editableRecords.length} records ({periodLabel}, {tabLabel}). Edit Amount, Memo or Category and paste the
               result back. Rows are matched by ID; other columns are ignored and rows you remove stay unchanged.
-              Daily and subscription entries are not included.
+              Daily and subscription entries are read-only and ignored if pasted.
             </p>
             <div className="flex justify-end gap-2 text-sm">
               <button
@@ -520,6 +526,14 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
                 className="px-2 py-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
               >
                 {bulkCopy.status === 'copied' ? 'Copied!' : bulkCopy.status === 'failed' ? 'Copy failed' : 'Copy'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkText('')}
+                disabled={bulkText === ''}
+                className="px-2 py-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors disabled:text-gray-300 disabled:hover:bg-transparent"
+              >
+                Clear
               </button>
               <button
                 type="button"
@@ -532,11 +546,15 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
             <textarea
               value={bulkText}
               onChange={(e) => setBulkText(e.target.value)}
+              placeholder={'Paste TSV with a header row, e.g.\nID\tCategory\n<id>\tFood'}
               aria-label="Transactions as TSV"
               spellCheck={false}
               wrap="off"
               className="flex-1 min-h-40 w-full p-2 bg-surface border border-gray-300 rounded-md font-mono text-xs text-gray-800 whitespace-pre overflow-auto focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {!bulkResult && (
+              <p className="text-xs text-gray-500">Only the rows you paste are updated.</p>
+            )}
             {bulkResult && (
               <div className="text-xs max-h-24 overflow-y-auto">
                 {bulkResult.errors.length > 0 ? (
@@ -547,6 +565,11 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
                 ) : (
                   <p className="text-gray-600">
                     {bulkResult.edits.length === 0 ? 'No changes yet' : `${bulkResult.edits.length} records will be updated`}
+                    {bulkResult.ignoredCount > 0 && (
+                      <span className="ml-1 text-gray-400">
+                        ({bulkResult.ignoredCount} daily/subscription rows ignored)
+                      </span>
+                    )}
                   </p>
                 )}
               </div>

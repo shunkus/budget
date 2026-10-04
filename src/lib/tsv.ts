@@ -32,14 +32,18 @@ export interface TsvParseResult {
   edits: TransactionEdit[];
   errors: string[];
   rowCount: number;
+  ignoredCount: number; // read-only rows (daily/subscription) skipped silently
 }
 
-// Turn pasted TSV back into edits. Rows are matched by ID; only Amount, Memo and Category are applied,
-// a missing column keeps the current value, and rows left out of the paste are not touched.
-export function parseTsvEdits(text: string, editable: TsvRecord[]): TsvParseResult {
+const isReadOnly = (record: TsvRecord) => Boolean(record.isDaily || record.isSubscription);
+
+// Turn pasted TSV back into edits. Rows are matched by ID against all records; only Amount, Memo and
+// Category are applied, a missing column keeps the current value, rows left out of the paste are not
+// touched, and read-only rows (e.g. from a pasted "Copy TSV" list) are skipped.
+export function parseTsvEdits(text: string, records: TsvRecord[]): TsvParseResult {
   const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
   const errors: string[] = [];
-  if (lines.length === 0) return { edits: [], errors: ['Paste a TSV with a header row.'], rowCount: 0 };
+  if (lines.length === 0) return { edits: [], errors: ['Paste a TSV with a header row.'], rowCount: 0, ignoredCount: 0 };
 
   const header = lines[0].split('\t').map(h => h.trim().toLowerCase());
   const column = (name: string) => header.indexOf(name.toLowerCase());
@@ -47,11 +51,12 @@ export function parseTsvEdits(text: string, editable: TsvRecord[]): TsvParseResu
   const amountCol = column('Amount');
   const memoCol = column('Memo');
   const categoryCol = column('Category');
-  if (idCol === -1) return { edits: [], errors: ['Header row must include an "ID" column.'], rowCount: 0 };
+  if (idCol === -1) return { edits: [], errors: ['Header row must include an "ID" column.'], rowCount: 0, ignoredCount: 0 };
 
-  const byId = new Map(editable.map(r => [r.id, r]));
+  const byId = new Map(records.map(r => [r.id, r]));
   const seen = new Set<string>();
   const edits: TransactionEdit[] = [];
+  let ignoredCount = 0;
 
   lines.slice(1).forEach((line, index) => {
     const lineNo = index + 2;
@@ -59,7 +64,11 @@ export function parseTsvEdits(text: string, editable: TsvRecord[]): TsvParseResu
     const id = (cells[idCol] ?? '').trim();
     const record = byId.get(id);
     if (!record) {
-      errors.push(`Line ${lineNo}: unknown or read-only ID "${id}"`);
+      errors.push(`Line ${lineNo}: unknown ID "${id}"`);
+      return;
+    }
+    if (isReadOnly(record)) {
+      ignoredCount += 1;
       return;
     }
     if (seen.has(id)) {
@@ -99,5 +108,5 @@ export function parseTsvEdits(text: string, editable: TsvRecord[]): TsvParseResu
     }
   });
 
-  return { edits, errors, rowCount: lines.length - 1 };
+  return { edits, errors, rowCount: lines.length - 1, ignoredCount };
 }
