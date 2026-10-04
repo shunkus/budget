@@ -6,10 +6,13 @@ import {
   StatsPeriod,
   filterByPeriod,
   getBuckets,
-  getCategoryTotals,
+  GroupTotal,
+  getMemoTotals,
+  getTotalsByCategory,
   getCoveredDays,
   getNiceMax,
   getWeekdayAverages,
+  isDailyPeriod,
 } from '@/lib/stats';
 
 interface StatsModalProps {
@@ -18,6 +21,7 @@ interface StatsModalProps {
 }
 
 const PERIOD_OPTIONS: { value: StatsPeriod; label: string }[] = [
+  { value: '7d', label: '7 days' },
   { value: '30d', label: '30 days' },
   { value: '12m', label: '12 months' },
 ];
@@ -66,14 +70,45 @@ export default function StatsModal({ isOpen, onClose }: StatsModalProps) {
   const peak = buckets.reduce((max, b) => (b.amount > max.amount ? b : max), buckets[0]);
   const weekdayAverages = getWeekdayAverages(records, coveredDays);
   const weekdayMax = Math.max(...weekdayAverages);
-  const categories = getCategoryTotals(records);
-  const categoryMax = categories[0]?.amount ?? 0;
+  // Subscription deductions have no category of their own; group them under one label
+  const categoryTotals = getTotalsByCategory(records, r => r.category ?? (r.isSubscription ? 'Subscriptions' : null));
+  const memoTotals = getMemoTotals(records);
 
   // The daily budget only makes sense as a reference against daily bars
-  const referenceLine = period === '30d' && budgetData.dailyBudget > 0 ? budgetData.dailyBudget : null;
+  const isDaily = isDailyPeriod(period);
+  const referenceLine = isDaily && budgetData.dailyBudget > 0 ? budgetData.dailyBudget : null;
   const axisMax = getNiceMax(Math.max(peak.amount, referenceLine ?? 0));
   const selected = selectedIndex !== null ? buckets[selectedIndex] : null;
   const axisLabelIndexes = [0, Math.floor((buckets.length - 1) / 2), buckets.length - 1];
+
+  // Horizontal bars scaled to the largest group, with count and share of the total
+  const renderBreakdown = (title: string, groups: GroupTotal[]) => {
+    const max = groups[0]?.amount ?? 0;
+    return (
+      <section>
+        <h3 className="text-sm font-medium text-gray-700 mb-2">{title}</h3>
+        <div className="space-y-2">
+          {groups.map(group => (
+            <div key={group.label} className="text-xs">
+              <div className="flex justify-between mb-0.5">
+                <span className="text-gray-700 truncate">
+                  {group.label}
+                  <span className="ml-1 text-gray-400">×{group.count}</span>
+                </span>
+                <span className="ml-2 shrink-0 text-gray-700 tabular-nums">
+                  {formatYen(group.amount)}
+                  <span className="ml-1 text-gray-400">{Math.round((group.amount / total) * 100)}%</span>
+                </span>
+              </div>
+              <div className="h-2">
+                <div className="h-full bg-blue-500 rounded-r" style={{ width: `${(group.amount / max) * 100}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
 
   const changePeriod = (value: StatsPeriod) => {
     setPeriod(value);
@@ -126,7 +161,7 @@ export default function StatsModal({ isOpen, onClose }: StatsModalProps) {
               <p className="text-sm sm:text-base font-semibold text-gray-800 whitespace-nowrap">{formatYen(averagePerDay)}</p>
             </div>
             <div className="p-2 bg-gray-100 rounded-lg min-w-0">
-              <p className="text-xs text-gray-500">{period === '30d' ? 'Top day' : 'Top month'}</p>
+              <p className="text-xs text-gray-500">{isDaily ? 'Top day' : 'Top month'}</p>
               <p className="text-sm sm:text-base font-semibold text-gray-800 whitespace-nowrap">{formatYen(peak.amount)}</p>
               {peak.amount > 0 && <p className="text-xs text-gray-400">{formatAxisLabel(peak.key)}</p>}
             </div>
@@ -139,11 +174,11 @@ export default function StatsModal({ isOpen, onClose }: StatsModalProps) {
               {/* Spending over time */}
               <section>
                 <h3 className="text-sm font-medium text-gray-700">
-                  {period === '30d' ? 'Daily spending' : 'Monthly spending'}
+                  {isDaily ? 'Daily spending' : 'Monthly spending'}
                 </h3>
                 <p className="text-xs text-gray-500 mb-2 h-4">
                   {selected
-                    ? `${formatBucketLabel(selected.key, period === '30d')} · ${formatYen(selected.amount)}`
+                    ? `${formatBucketLabel(selected.key, isDaily)} · ${formatYen(selected.amount)}`
                     : 'Tap a bar for details'}
                 </p>
                 <div className="flex gap-1">
@@ -176,7 +211,7 @@ export default function StatsModal({ isOpen, onClose }: StatsModalProps) {
                           type="button"
                           onClick={() => setSelectedIndex(selectedIndex === i ? null : i)}
                           onMouseEnter={() => setSelectedIndex(i)}
-                          aria-label={`${formatBucketLabel(bucket.key, period === '30d')}: ${formatYen(bucket.amount)}`}
+                          aria-label={`${formatBucketLabel(bucket.key, isDaily)}: ${formatYen(bucket.amount)}`}
                           className="flex-1 h-full flex items-end justify-center min-w-0"
                         >
                           <span
@@ -190,61 +225,50 @@ export default function StatsModal({ isOpen, onClose }: StatsModalProps) {
                     </div>
                   </div>
                 </div>
-                {/* X-axis: first, middle and last labels */}
-                <div className="flex ml-10 mt-1 text-[10px] text-gray-400">
-                  {axisLabelIndexes.map((index, i) => (
-                    <span key={index} className={`flex-1 ${i === 0 ? 'text-left' : i === 1 ? 'text-center' : 'text-right'}`}>
-                      {formatAxisLabel(buckets[index].key)}
-                    </span>
-                  ))}
-                </div>
+                {/* X-axis: every weekday for 7 days, otherwise first, middle and last labels */}
+                {period === '7d' ? (
+                  <div className="flex gap-0.5 ml-10 mt-1 text-[10px] text-gray-400">
+                    {buckets.map(bucket => (
+                      <span key={bucket.key} className="flex-1 text-center">
+                        {WEEKDAY_NAMES[new Date(bucket.key + 'T00:00:00Z').getUTCDay()]}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex ml-10 mt-1 text-[10px] text-gray-400">
+                    {axisLabelIndexes.map((index, i) => (
+                      <span key={index} className={`flex-1 ${i === 0 ? 'text-left' : i === 1 ? 'text-center' : 'text-right'}`}>
+                        {formatAxisLabel(buckets[index].key)}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </section>
 
-              {/* Weekday pattern */}
-              <section>
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Average by weekday</h3>
-                <div className="space-y-1.5">
-                  {WEEKDAY_ORDER.map(day => (
-                    <div key={day} className="flex items-center gap-2 text-xs">
-                      <span className="w-8 text-gray-500">{WEEKDAY_NAMES[day]}</span>
-                      <div className="flex-1 h-3">
-                        <div
-                          className="h-full bg-blue-500 rounded-r"
-                          style={{ width: weekdayMax > 0 ? `${(weekdayAverages[day] / weekdayMax) * 100}%` : 0 }}
-                        />
+              {/* Weekday pattern (with 7 days each weekday appears once, so the chart above already shows it) */}
+              {period !== '7d' && (
+                <section>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Average by weekday</h3>
+                  <div className="space-y-1.5">
+                    {WEEKDAY_ORDER.map(day => (
+                      <div key={day} className="flex items-center gap-2 text-xs">
+                        <span className="w-8 text-gray-500">{WEEKDAY_NAMES[day]}</span>
+                        <div className="flex-1 h-3">
+                          <div
+                            className="h-full bg-blue-500 rounded-r"
+                            style={{ width: weekdayMax > 0 ? `${(weekdayAverages[day] / weekdayMax) * 100}%` : 0 }}
+                          />
+                        </div>
+                        <span className="w-16 text-right text-gray-700 tabular-nums">{formatYen(weekdayAverages[day])}</span>
                       </div>
-                      <span className="w-16 text-right text-gray-700 tabular-nums">{formatYen(weekdayAverages[day])}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {/* Where the money went */}
-              <section>
-                <h3 className="text-sm font-medium text-gray-700 mb-2">By memo</h3>
-                <div className="space-y-2">
-                  {categories.map(category => (
-                    <div key={category.label} className="text-xs">
-                      <div className="flex justify-between mb-0.5">
-                        <span className="text-gray-700 truncate">
-                          {category.label}
-                          <span className="ml-1 text-gray-400">×{category.count}</span>
-                        </span>
-                        <span className="ml-2 shrink-0 text-gray-700 tabular-nums">
-                          {formatYen(category.amount)}
-                          <span className="ml-1 text-gray-400">{Math.round((category.amount / total) * 100)}%</span>
-                        </span>
-                      </div>
-                      <div className="h-2">
-                        <div
-                          className="h-full bg-blue-500 rounded-r"
-                          style={{ width: `${(category.amount / categoryMax) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
+              {renderBreakdown('By category', categoryTotals)}
+              {renderBreakdown('By memo', memoTotals)}
             </>
           )}
         </div>

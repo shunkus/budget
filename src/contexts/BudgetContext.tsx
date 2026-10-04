@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { BudgetData, BillingCycle, ExpenseRecord, IncomeRecord, Subscription, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord, getIncomeHistory, addIncomeRecord, deleteIncomeRecord, updateExpenseRecord, updateIncomeRecord, applyRecordChanges, RecordChanges, getSubscriptions, addSubscriptionRecord, deleteSubscriptionRecord } from '@/lib/storage';
+import { BudgetData, BillingCycle, ExpenseRecord, IncomeRecord, Subscription, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord, getIncomeHistory, addIncomeRecord, deleteIncomeRecord, updateExpenseRecord, updateIncomeRecord, applyRecordChanges, RecordChanges, TransactionEdit, saveExpenseHistory, saveIncomeHistory, getSubscriptions, addSubscriptionRecord, deleteSubscriptionRecord } from '@/lib/storage';
 
 interface BudgetContextType {
   budgetData: BudgetData;
@@ -12,11 +12,12 @@ interface BudgetContextType {
   updateDailyBudget: (amount: number) => void;
   updateCurrentBudget: (amount: number) => void;
   updateLastUpdateDate: (date: string) => void;
-  addExpense: (amount: number, note?: string) => void;
+  addExpense: (amount: number, note?: string, category?: string) => void;
   removeExpense: (id: string, amount: number) => void;
-  addIncome: (amount: number, note?: string) => void;
+  addIncome: (amount: number, note?: string, category?: string) => void;
   removeIncome: (id: string, amount: number) => void;
   editTransaction: (type: 'expense' | 'income', id: string, changes: RecordChanges) => void;
+  bulkEditTransactions: (edits: TransactionEdit[]) => void;
   addSubscription: (title: string, amount: number, cycle: BillingCycle) => void;
   removeSubscription: (id: string) => void;
   refreshBudget: () => void;
@@ -66,9 +67,9 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     setBudgetData(newData);
   };
 
-  const addExpense = (amount: number, note?: string) => {
+  const addExpense = (amount: number, note?: string, category?: string) => {
     // Add to history
-    const record = addExpenseRecord(amount, note);
+    const record = addExpenseRecord(amount, note, category);
     setExpenseHistory(prev => [...prev, record]);
     // Deduct from budget
     const newBudget = budgetData.currentBudget - amount;
@@ -88,9 +89,9 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     setBudgetData(newData);
   };
 
-  const addIncome = (amount: number, note?: string) => {
+  const addIncome = (amount: number, note?: string, category?: string) => {
     // Add to history
-    const record = addIncomeRecord(amount, note);
+    const record = addIncomeRecord(amount, note, category);
     setIncomeHistory(prev => [...prev, record]);
     // Add to budget
     const newBudget = budgetData.currentBudget + amount;
@@ -135,6 +136,36 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Apply many edits at once (e.g. from a pasted TSV): one write per history and one budget update
+  const bulkEditTransactions = (edits: TransactionEdit[]) => {
+    let nextExpenses = expenseHistory;
+    let nextIncome = incomeHistory;
+    let budgetDelta = 0;
+
+    for (const { type, id, changes } of edits) {
+      const history = type === 'expense' ? nextExpenses : nextIncome;
+      const original = history.find(r => r.id === id);
+      if (!original) continue;
+      const diff = changes.amount - original.amount;
+      budgetDelta += type === 'expense' ? -diff : diff;
+      if (type === 'expense') {
+        nextExpenses = applyRecordChanges(nextExpenses, id, changes);
+      } else {
+        nextIncome = applyRecordChanges(nextIncome, id, changes);
+      }
+    }
+
+    saveExpenseHistory(nextExpenses);
+    saveIncomeHistory(nextIncome);
+    setExpenseHistory(nextExpenses);
+    setIncomeHistory(nextIncome);
+    if (budgetDelta !== 0) {
+      const newBudget = budgetData.currentBudget + budgetDelta;
+      saveBudgetData({ currentBudget: newBudget });
+      setBudgetData({ ...budgetData, currentBudget: newBudget });
+    }
+  };
+
   const addSubscription = (title: string, amount: number, cycle: BillingCycle) => {
     const subscription = addSubscriptionRecord(title, amount, cycle);
     setSubscriptions(prev => [...prev, subscription]);
@@ -147,7 +178,7 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
 
   return (
     <BudgetContext.Provider
-      value={{ budgetData, expenseHistory, incomeHistory, subscriptions, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, addExpense, removeExpense, addIncome, removeIncome, editTransaction, addSubscription, removeSubscription, refreshBudget }}
+      value={{ budgetData, expenseHistory, incomeHistory, subscriptions, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, addExpense, removeExpense, addIncome, removeIncome, editTransaction, bulkEditTransactions, addSubscription, removeSubscription, refreshBudget }}
     >
       {children}
     </BudgetContext.Provider>

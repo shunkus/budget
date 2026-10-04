@@ -19,6 +19,7 @@ export interface TransactionRecord {
   isDaily?: boolean; // true if this is a daily budget addition
   isSubscription?: boolean; // true if this is a daily subscription deduction
   note?: string; // optional free-text memo
+  category?: string; // optional free-text category
 }
 
 // Alias for backward compatibility
@@ -219,7 +220,7 @@ export function getExpenseHistory(): ExpenseRecord[] {
   }
 }
 
-export function addExpenseRecord(amount: number, note?: string): ExpenseRecord {
+export function addExpenseRecord(amount: number, note?: string, category?: string): ExpenseRecord {
   const history = getExpenseHistory();
   const now = new Date();
 
@@ -229,6 +230,7 @@ export function addExpenseRecord(amount: number, note?: string): ExpenseRecord {
     date: getTodayDateString(),
     timestamp: now.getTime(),
     ...(note ? { note } : {}),
+    ...(category ? { category } : {}),
   };
 
   history.push(record);
@@ -247,9 +249,16 @@ export function addExpenseRecord(amount: number, note?: string): ExpenseRecord {
 export interface RecordChanges {
   amount: number;
   note?: string;
+  category?: string;
 }
 
-// Apply amount/note changes to one record; an empty note removes the field
+export interface TransactionEdit {
+  type: 'expense' | 'income';
+  id: string;
+  changes: RecordChanges;
+}
+
+// Apply amount/note/category changes to one record; an empty note or category removes the field
 export function applyRecordChanges(records: TransactionRecord[], id: string, changes: RecordChanges): TransactionRecord[] {
   return records.map(r => {
     if (r.id !== id) return r;
@@ -259,6 +268,11 @@ export function applyRecordChanges(records: TransactionRecord[], id: string, cha
     } else {
       delete updated.note;
     }
+    if (changes.category) {
+      updated.category = changes.category;
+    } else {
+      delete updated.category;
+    }
     return updated;
   });
 }
@@ -266,6 +280,10 @@ export function applyRecordChanges(records: TransactionRecord[], id: string, cha
 export function updateExpenseRecord(id: string, changes: RecordChanges): void {
   const history = applyRecordChanges(getExpenseHistory(), id, changes);
   localStorage.setItem(STORAGE_KEYS.EXPENSE_HISTORY, JSON.stringify(history));
+}
+
+export function saveExpenseHistory(records: ExpenseRecord[]): void {
+  localStorage.setItem(STORAGE_KEYS.EXPENSE_HISTORY, JSON.stringify(records));
 }
 
 export function deleteExpenseRecord(id: string): void {
@@ -294,7 +312,7 @@ export function getIncomeHistory(): IncomeRecord[] {
   }
 }
 
-export function addIncomeRecord(amount: number, note?: string): IncomeRecord {
+export function addIncomeRecord(amount: number, note?: string, category?: string): IncomeRecord {
   const history = getIncomeHistory();
   const now = new Date();
 
@@ -304,6 +322,7 @@ export function addIncomeRecord(amount: number, note?: string): IncomeRecord {
     date: getTodayDateString(),
     timestamp: now.getTime(),
     ...(note ? { note } : {}),
+    ...(category ? { category } : {}),
   };
 
   history.push(record);
@@ -322,6 +341,10 @@ export function addIncomeRecord(amount: number, note?: string): IncomeRecord {
 export function updateIncomeRecord(id: string, changes: RecordChanges): void {
   const history = applyRecordChanges(getIncomeHistory(), id, changes);
   localStorage.setItem(STORAGE_KEYS.INCOME_HISTORY, JSON.stringify(history));
+}
+
+export function saveIncomeHistory(records: IncomeRecord[]): void {
+  localStorage.setItem(STORAGE_KEYS.INCOME_HISTORY, JSON.stringify(records));
 }
 
 export function deleteIncomeRecord(id: string): void {

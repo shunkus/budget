@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useClipboardCopy } from '@/hooks/useClipboardCopy';
 import { useBudget } from '@/contexts/BudgetContext';
 import { BillingCycle, Subscription, getDailyCost, getDailySubscriptionTotal } from '@/lib/storage';
 
@@ -32,7 +33,7 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
   const [amount, setAmount] = useState('');
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const { status: copyStatus, copy } = useClipboardCopy();
   const [searchQuery, setSearchQuery] = useState('');
   const [cycleFilter, setCycleFilter] = useState<CycleFilter>('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('name');
@@ -65,17 +66,12 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
       : `${formatYen(subscription.amount / 12)} / month`
   );
 
-  const handleCopy = async () => {
-    const text = visibleSubscriptions
-      .map(s => `${s.title}\t${s.cycle === 'monthly' ? 'Monthly' : 'Yearly'}\t${formatYen(s.amount)}`)
-      .join('\n');
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopyStatus('copied');
-    } catch {
-      setCopyStatus('failed');
-    }
-    setTimeout(() => setCopyStatus('idle'), 2000);
+  const handleCopy = () => {
+    copy(
+      visibleSubscriptions
+        .map(s => `${s.title}\t${s.cycle === 'monthly' ? 'Monthly' : 'Yearly'}\t${formatYen(s.amount)}`)
+        .join('\n'),
+    );
   };
 
   const normalizedQuery = searchQuery.trim().toLowerCase();

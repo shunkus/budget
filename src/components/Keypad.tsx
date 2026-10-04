@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
 import { getKeypadKeyHeight, saveKeypadKeyHeight } from '@/lib/storage';
-import { AMOUNT_WINDOW_DAYS, MAX_NOTE_LENGTH, getFrequentNotes, getFrequentValues } from '@/lib/suggestions';
+import { AMOUNT_WINDOW_DAYS, MAX_CATEGORY_LENGTH, MAX_NOTE_LENGTH, getFrequentCategories, getFrequentNotes, getFrequentValues, getLastCategoryForNote } from '@/lib/suggestions';
 import { appendKey, backspace, evaluate, hasOperator } from '@/lib/calculator';
 
 const MAX_FREQUENT_AMOUNTS = 4;
@@ -39,8 +39,12 @@ export default function Keypad() {
   const [keyHeight, setKeyHeight] = useState(() => getKeypadKeyHeight() ?? DEFAULT_KEY_HEIGHT);
   const gridRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startY: number; startHeight: number; previousKeyHeight: number } | null>(null);
-  const [isNoteFocused, setIsNoteFocused] = useState(false);
+  const [category, setCategory] = useState('');
+  // Once the user types a category, memo changes stop overwriting it
+  const [isCategoryTouched, setIsCategoryTouched] = useState(false);
+  const [focusedField, setFocusedField] = useState<'note' | 'category' | null>(null);
   const noteInputRef = useRef<HTMLInputElement>(null);
+  const categoryInputRef = useRef<HTMLInputElement>(null);
 
   const result = evaluate(expression);
   const amount = result === null ? 0 : Math.round(result);
@@ -48,13 +52,16 @@ export default function Keypad() {
   const frequentAmounts = getFrequentValues(expenseHistory, AMOUNT_WINDOW_DAYS, r => (r.isSubscription ? undefined : r.amount))
     .slice(0, MAX_FREQUENT_AMOUNTS);
 
+  const allRecords = [...expenseHistory, ...incomeHistory];
   const trimmedNote = note.trim();
-  const noteQuery = trimmedNote.toLowerCase();
-  const noteSuggestions = getFrequentNotes([...expenseHistory, ...incomeHistory])
-    .filter(n => n !== trimmedNote && n.toLowerCase().includes(noteQuery))
-    .slice(0, MAX_NOTE_SUGGESTIONS);
-  // While typing a memo the OS keyboard covers the keypad, so the chip row offers memos instead
-  const showNoteSuggestions = isNoteFocused && noteSuggestions.length > 0;
+  const trimmedCategory = category.trim();
+  const matching = (values: string[], current: string) =>
+    values.filter(v => v !== current && v.toLowerCase().includes(current.toLowerCase())).slice(0, MAX_NOTE_SUGGESTIONS);
+  // While typing, the OS keyboard covers the keypad, so the chip row offers memos or categories instead
+  const textSuggestions =
+    focusedField === 'note' ? matching(getFrequentNotes(allRecords), trimmedNote)
+    : focusedField === 'category' ? matching(getFrequentCategories(allRecords), trimmedCategory)
+    : [];
 
   const press = (key: string) => setExpression(prev => appendKey(prev, key));
 
@@ -70,13 +77,28 @@ export default function Keypad() {
   const handleSubmit = (type: 'expense' | 'income') => {
     if (!canSubmit) return;
     const memo = trimmedNote || undefined;
+    const categoryValue = trimmedCategory || undefined;
     if (type === 'expense') {
-      addExpense(amount, memo);
+      addExpense(amount, memo, categoryValue);
     } else {
-      addIncome(amount, memo);
+      addIncome(amount, memo, categoryValue);
     }
     setExpression('');
     setNote('');
+    setCategory('');
+    setIsCategoryTouched(false);
+  };
+
+  // A memo used before brings back its last category, unless the user picked one
+  const updateNote = (value: string) => {
+    setNote(value);
+    if (!isCategoryTouched) setCategory(getLastCategoryForNote(allRecords, value) ?? '');
+  };
+
+  const updateCategory = (value: string) => {
+    setCategory(value);
+    // Clearing the field hands control back to the memo-based auto fill
+    setIsCategoryTouched(value.trim() !== '');
   };
 
   // Height actually rendered, which can be less than requested when the screen is short
@@ -124,9 +146,14 @@ export default function Keypad() {
     }
   };
 
-  const handleNoteSuggestion = (value: string) => {
-    setNote(value);
-    noteInputRef.current?.blur();
+  const handleTextSuggestion = (value: string) => {
+    if (focusedField === 'note') {
+      updateNote(value);
+      noteInputRef.current?.blur();
+    } else {
+      updateCategory(value);
+      categoryInputRef.current?.blur();
+    }
   };
 
   const renderKey = (label: string, onClick: () => void, style: KeyStyle, extraClass = '', ariaLabel?: string) => (
@@ -164,19 +191,36 @@ export default function Keypad() {
       </div>
       {/* Display */}
       <div className="bg-surface rounded-xl shadow-sm px-4 py-1.5 text-right">
-        <input
-          ref={noteInputRef}
-          type="text"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          onFocus={() => setIsNoteFocused(true)}
-          onBlur={() => setIsNoteFocused(false)}
-          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-          maxLength={MAX_NOTE_LENGTH}
-          placeholder="Memo (optional)"
-          enterKeyHint="done"
-          className="w-full bg-transparent text-sm text-gray-700 placeholder:text-gray-300 border-b border-gray-200 pb-1 mb-0.5 focus:outline-none focus:border-blue-500"
-        />
+        <div className="flex gap-3 border-b border-gray-200 pb-1 mb-0.5 focus-within:border-blue-500">
+          <input
+            ref={noteInputRef}
+            type="text"
+            value={note}
+            onChange={(e) => updateNote(e.target.value)}
+            onFocus={() => setFocusedField('note')}
+            onBlur={() => setFocusedField(null)}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+            maxLength={MAX_NOTE_LENGTH}
+            placeholder="Memo (optional)"
+            aria-label="Memo"
+            enterKeyHint="done"
+            className="flex-1 w-0 bg-transparent text-sm text-gray-700 placeholder:text-gray-300 focus:outline-none"
+          />
+          <input
+            ref={categoryInputRef}
+            type="text"
+            value={category}
+            onChange={(e) => updateCategory(e.target.value)}
+            onFocus={() => setFocusedField('category')}
+            onBlur={() => setFocusedField(null)}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+            maxLength={MAX_CATEGORY_LENGTH}
+            placeholder="Category"
+            aria-label="Category"
+            enterKeyHint="done"
+            className="w-28 bg-transparent text-sm text-right text-gray-700 placeholder:text-gray-300 focus:outline-none"
+          />
+        </div>
         <p className="text-2xl font-bold text-gray-800 truncate min-h-8">
           {expression ? `¥${formatExpression(expression)}` : <span className="text-gray-300">¥0</span>}
         </p>
@@ -186,16 +230,16 @@ export default function Keypad() {
         </p>
       </div>
 
-      {/* Suggestions: memos while editing the memo, otherwise frequent amounts */}
-      {showNoteSuggestions ? (
+      {/* Suggestions: memos/categories while typing them, otherwise frequent amounts */}
+      {textSuggestions.length > 0 ? (
         <div className="flex gap-2 overflow-x-auto">
-          {noteSuggestions.map(value => (
+          {textSuggestions.map(value => (
             <button
               key={value}
               type="button"
               // Keep the input focused until the click lands
               onPointerDown={(e) => e.preventDefault()}
-              onClick={() => handleNoteSuggestion(value)}
+              onClick={() => handleTextSuggestion(value)}
               className="shrink-0 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-sm text-blue-700 hover:bg-blue-100 active:scale-95 transition"
             >
               {value}
