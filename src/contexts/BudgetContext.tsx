@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { BudgetData, BillingCycle, ExpenseRecord, IncomeRecord, Subscription, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord, getIncomeHistory, addIncomeRecord, deleteIncomeRecord, updateExpenseRecord, updateIncomeRecord, applyRecordChanges, RecordChanges, TransactionEdit, saveExpenseHistory, saveIncomeHistory, getSubscriptions, addSubscriptionRecord, deleteSubscriptionRecord, saveSubscriptions } from '@/lib/storage';
 import { restoreBackup } from '@/lib/backup';
+import type { TsvAddition } from '@/lib/tsv';
 
 interface BudgetContextType {
   budgetData: BudgetData;
@@ -18,7 +19,7 @@ interface BudgetContextType {
   addIncome: (amount: number, note?: string, category?: string) => void;
   removeIncome: (id: string, amount: number) => void;
   editTransaction: (type: 'expense' | 'income', id: string, changes: RecordChanges) => void;
-  bulkEditTransactions: (edits: TransactionEdit[]) => void;
+  bulkEditTransactions: (edits: TransactionEdit[], additions?: TsvAddition[]) => void;
   addSubscription: (title: string, amount: number, cycle: BillingCycle) => void;
   removeSubscription: (id: string) => void;
   replaceSubscriptions: (subscriptions: Subscription[]) => void;
@@ -140,7 +141,9 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
   };
 
   // Apply many edits at once (e.g. from a pasted TSV): one write per history and one budget update
-  const bulkEditTransactions = (edits: TransactionEdit[]) => {
+  // Added rows (e.g. history copied from another device) are recorded as history only; the budget
+  // moves just by the amount differences of edited records
+  const bulkEditTransactions = (edits: TransactionEdit[], additions: TsvAddition[] = []) => {
     let nextExpenses = expenseHistory;
     let nextIncome = incomeHistory;
     let budgetDelta = 0;
@@ -155,6 +158,13 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
         nextExpenses = applyRecordChanges(nextExpenses, id, changes);
       } else {
         nextIncome = applyRecordChanges(nextIncome, id, changes);
+      }
+    }
+    for (const { type, record } of additions) {
+      if (type === 'expense') {
+        nextExpenses = [...nextExpenses, record];
+      } else {
+        nextIncome = [...nextIncome, record];
       }
     }
 

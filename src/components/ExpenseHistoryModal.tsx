@@ -221,7 +221,8 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
   ];
   // An empty box (e.g. after Clear) is waiting for a paste, not an error
   const bulkResult = mode === 'bulk' && bulkText.trim() !== '' ? parseTsvEdits(bulkText, allTsvRecords) : null;
-  const canApplyBulk = bulkResult !== null && bulkResult.errors.length === 0 && bulkResult.edits.length > 0;
+  const bulkChangeCount = bulkResult ? bulkResult.edits.length + bulkResult.additions.length : 0;
+  const canApplyBulk = bulkResult !== null && bulkResult.errors.length === 0 && bulkChangeCount > 0;
 
   const openBulkEdit = () => {
     setEditingId(null);
@@ -231,7 +232,7 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
 
   const applyBulkEdit = () => {
     if (!bulkResult || !canApplyBulk) return;
-    bulkEditTransactions(bulkResult.edits);
+    bulkEditTransactions(bulkResult.edits, bulkResult.additions);
     setMode('list');
   };
 
@@ -516,8 +517,9 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
           <div className="flex-1 flex flex-col min-h-0 gap-2">
             <p className="text-xs text-gray-500">
               {editableRecords.length} records ({periodLabel}, {tabLabel}). Edit Amount, Memo or Category and paste the
-              result back. Rows are matched by ID; other columns are ignored and rows you remove stay unchanged.
-              Daily and subscription entries are read-only and ignored if pasted.
+              result back. Rows are matched by ID and rows you remove stay unchanged. Rows with an empty or unknown ID
+              (e.g. copied from another device) are added as history using Date, Time and Type, without changing your
+              budget. Existing daily and subscription entries are read-only and ignored if pasted.
             </p>
             <div className="flex justify-end gap-2 text-sm">
               <button
@@ -564,7 +566,9 @@ export default function ExpenseHistoryModal({ isOpen, onClose }: ExpenseHistoryM
                   </ul>
                 ) : (
                   <p className="text-gray-600">
-                    {bulkResult.edits.length === 0 ? 'No changes yet' : `${bulkResult.edits.length} records will be updated`}
+                    {bulkChangeCount === 0
+                      ? 'No changes yet'
+                      : `${bulkResult.edits.length} updated, ${bulkResult.additions.length} added`}
                     {bulkResult.ignoredCount > 0 && (
                       <span className="ml-1 text-gray-400">
                         ({bulkResult.ignoredCount} daily/subscription rows ignored)
