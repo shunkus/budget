@@ -398,8 +398,8 @@ export default function SubscriptionsModal({ isOpen, onClose }: SubscriptionsMod
           /* Bulk edit: copy the TSV to any editor or AI, then paste the edited version back */
           <div className="flex-1 flex flex-col min-h-0 gap-2">
             <p className="text-xs text-gray-500">
-              Edit Title, Cycle (Monthly / Yearly) or Amount and paste the result back. Rows are matched by ID; leave ID
-              empty to add a new subscription. Subscriptions you remove from the text are kept.
+              Edit Title, Cycle (Monthly / Yearly) or Amount and paste the result back. Rows are matched by ID; rows with
+              an empty or unknown ID (e.g. copied from another device) are added. Subscriptions you remove from the text are kept.
             </p>
             <div className="flex justify-end gap-2 text-sm">
               <button

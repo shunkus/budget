@@ -29,8 +29,9 @@ export interface SubscriptionTsvResult {
   errors: string[];
 }
 
-// Rows with a known ID update that subscription, rows with an empty ID add a new one, and
-// subscriptions left out of the paste are kept. Nothing is deleted from a paste.
+// Rows with a known ID update that subscription. Rows with an empty ID add a new one, and rows with an
+// unknown ID (e.g. copied from another device) add it under that ID, so pasting the same list again
+// updates instead of duplicating. Subscriptions left out of the paste are kept; nothing is deleted.
 export function parseSubscriptionTsv(text: string, current: Subscription[], now = Date.now()): SubscriptionTsvResult {
   const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
   const empty = (error: string): SubscriptionTsvResult => ({ subscriptions: current, updatedCount: 0, addedCount: 0, errors: [error] });
@@ -44,6 +45,7 @@ export function parseSubscriptionTsv(text: string, current: Subscription[], now 
   const byId = new Map(current.map(s => [s.id, s]));
   const updates = new Map<string, Subscription>();
   const added: Subscription[] = [];
+  const seenIds = new Set<string>();
   const errors: string[] = [];
 
   lines.slice(1).forEach((line, index) => {
@@ -51,14 +53,11 @@ export function parseSubscriptionTsv(text: string, current: Subscription[], now 
     const cells = line.split('\t');
     const id = idCol === -1 ? '' : clean(cells[idCol]);
     const existing = id ? byId.get(id) : undefined;
-    if (id && !existing) {
-      errors.push(`Line ${lineNo}: unknown ID "${id}"`);
-      return;
-    }
-    if (id && updates.has(id)) {
+    if (id && seenIds.has(id)) {
       errors.push(`Line ${lineNo}: duplicate ID "${id}"`);
       return;
     }
+    if (id) seenIds.add(id);
 
     // Missing columns keep the current value; new rows need all three
     const title = titleCol === -1 ? existing?.title ?? '' : clean(cells[titleCol]);
@@ -92,7 +91,7 @@ export function parseSubscriptionTsv(text: string, current: Subscription[], now 
         updates.set(existing.id, existing);
       }
     } else {
-      added.push({ id: `${now}-${added.length}-${Math.random().toString(36).substring(2, 8)}`, title, amount, cycle, createdAt: now });
+      added.push({ id: id || `${now}-${added.length}-${Math.random().toString(36).substring(2, 8)}`, title, amount, cycle, createdAt: now });
     }
   });
 
