@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemePreference, getThemePreference, setThemePreference } from '@/lib/theme';
+import { createBackup, parseBackup } from '@/lib/backup';
+import { useClipboardCopy } from '@/hooks/useClipboardCopy';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'system', label: 'System' },
@@ -17,12 +19,14 @@ interface SettingsModalProps {
 }
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { budgetData, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate } = useBudget();
+  const { budgetData, restoreData, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate } = useBudget();
   const { logout } = useAuth();
   const [dailyAmount, setDailyAmount] = useState('');
   const [lastUpdate, setLastUpdate] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [importText, setImportText] = useState<string | null>(null);
+  const backupCopy = useClipboardCopy();
   const [theme, setTheme] = useState<ThemePreference>(getThemePreference);
 
   useEffect(() => {
@@ -31,6 +35,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setLastUpdate(budgetData.lastUpdateDate);
       setShowResetConfirm(false);
       setShowLogoutConfirm(false);
+      setImportText(null);
     }
   }, [isOpen, budgetData.dailyBudget, budgetData.lastUpdateDate]);
 
@@ -58,6 +63,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   };
 
   if (!isOpen) return null;
+
+  // Validated before anything is overwritten
+  const parsedImport = importText && importText.trim() !== '' ? parseBackup(importText) : null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -153,6 +161,70 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           )}
           <p className="text-sm text-gray-500 mt-1">
             This will reset your budget to today&apos;s daily amount (¥{budgetData.dailyBudget.toLocaleString()}).
+          </p>
+        </div>
+
+        {/* Data Section: move data between devices (e.g. to the mobile app) or keep a backup */}
+        <div className="mb-6 pt-4 border-t border-gray-200">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Data
+          </label>
+          {importText === null ? (
+            <div className="flex gap-2">
+              <button
+                onClick={() => backupCopy.copy(createBackup(key => localStorage.getItem(key)))}
+                className="px-4 py-2 border border-gray-300 text-gray-600 rounded-md hover:bg-gray-50 transition-colors text-sm"
+              >
+                {backupCopy.status === 'copied' ? 'Copied!' : backupCopy.status === 'failed' ? 'Copy failed' : 'Copy all data'}
+              </button>
+              <button
+                onClick={() => setImportText('')}
+                className="px-4 py-2 border border-gray-300 text-gray-600 rounded-md hover:bg-gray-50 transition-colors text-sm"
+              >
+                Import data
+              </button>
+            </div>
+          ) : (
+            (
+              <div className="space-y-2">
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder="Paste the copied data here"
+                  aria-label="Backup data"
+                  spellCheck={false}
+                  className="w-full h-24 p-2 bg-surface border border-gray-300 rounded-md font-mono text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {parsedImport && 'error' in parsedImport && <p className="text-sm text-red-600">{parsedImport.error}</p>}
+                {parsedImport && 'summary' in parsedImport && (
+                  <p className="text-sm text-gray-600">
+                    {parsedImport.summary.expenseCount} expenses, {parsedImport.summary.incomeCount} income records,{' '}
+                    {parsedImport.summary.subscriptionCount} subscriptions, budget ¥{parsedImport.summary.currentBudget.toLocaleString()}.
+                    {' '}<span className="text-red-600">This replaces all current data.</span>
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (parsedImport && 'data' in parsedImport) {
+                        restoreData(parsedImport.data);
+                        onClose();
+                      }
+                    }}
+                    disabled={!parsedImport || !('data' in parsedImport)}
+                    className="px-3 py-1 bg-red-500 text-white text-sm rounded-md hover:bg-red-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    Replace all data
+                  </button>
+                  <button onClick={() => setImportText(null)} className="px-3 py-1 text-gray-600 text-sm hover:text-gray-800">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )
+          )}
+          <p className="text-sm text-gray-500 mt-1">
+            Copy all data to move it to another device or the mobile app.
           </p>
         </div>
 

@@ -385,6 +385,10 @@ export function addSubscriptionRecord(title: string, amount: number, cycle: Bill
   return subscription;
 }
 
+export function saveSubscriptions(subscriptions: Subscription[]): void {
+  localStorage.setItem(STORAGE_KEYS.SUBSCRIPTIONS, JSON.stringify(subscriptions));
+}
+
 export function deleteSubscriptionRecord(id: string): void {
   const subscriptions = getSubscriptions().filter(s => s.id !== id);
   localStorage.setItem(STORAGE_KEYS.SUBSCRIPTIONS, JSON.stringify(subscriptions));

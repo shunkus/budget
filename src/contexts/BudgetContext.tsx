@@ -1,7 +1,8 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { BudgetData, BillingCycle, ExpenseRecord, IncomeRecord, Subscription, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord, getIncomeHistory, addIncomeRecord, deleteIncomeRecord, updateExpenseRecord, updateIncomeRecord, applyRecordChanges, RecordChanges, TransactionEdit, saveExpenseHistory, saveIncomeHistory, getSubscriptions, addSubscriptionRecord, deleteSubscriptionRecord } from '@/lib/storage';
+import { BudgetData, BillingCycle, ExpenseRecord, IncomeRecord, Subscription, saveBudgetData, calculateAndUpdateBudget, getExpenseHistory, addExpenseRecord, deleteExpenseRecord, getIncomeHistory, addIncomeRecord, deleteIncomeRecord, updateExpenseRecord, updateIncomeRecord, applyRecordChanges, RecordChanges, TransactionEdit, saveExpenseHistory, saveIncomeHistory, getSubscriptions, addSubscriptionRecord, deleteSubscriptionRecord, saveSubscriptions } from '@/lib/storage';
+import { restoreBackup } from '@/lib/backup';
 
 interface BudgetContextType {
   budgetData: BudgetData;
@@ -20,6 +21,8 @@ interface BudgetContextType {
   bulkEditTransactions: (edits: TransactionEdit[]) => void;
   addSubscription: (title: string, amount: number, cycle: BillingCycle) => void;
   removeSubscription: (id: string) => void;
+  replaceSubscriptions: (subscriptions: Subscription[]) => void;
+  restoreData: (data: Record<string, string | null>) => void;
   refreshBudget: () => void;
 }
 
@@ -176,9 +179,21 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     setSubscriptions(prev => prev.filter(s => s.id !== id));
   };
 
+  // Used by single edits and TSV bulk edits, which produce the full updated list
+  const replaceSubscriptions = (next: Subscription[]) => {
+    saveSubscriptions(next);
+    setSubscriptions(next);
+  };
+
+  // Replace all data with a backup, then catch up on days passed since its last update
+  const restoreData = (data: Record<string, string | null>) => {
+    restoreBackup(data, (key, value) => localStorage.setItem(key, value), key => localStorage.removeItem(key));
+    refreshBudget();
+  };
+
   return (
     <BudgetContext.Provider
-      value={{ budgetData, expenseHistory, incomeHistory, subscriptions, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, addExpense, removeExpense, addIncome, removeIncome, editTransaction, bulkEditTransactions, addSubscription, removeSubscription, refreshBudget }}
+      value={{ budgetData, expenseHistory, incomeHistory, subscriptions, isLoading, updateDailyBudget, updateCurrentBudget, updateLastUpdateDate, addExpense, removeExpense, addIncome, removeIncome, editTransaction, bulkEditTransactions, addSubscription, removeSubscription, replaceSubscriptions, restoreData, refreshBudget }}
     >
       {children}
     </BudgetContext.Provider>
