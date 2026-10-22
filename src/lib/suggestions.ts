@@ -51,15 +51,36 @@ export function getLastCategoryForNote(records: TransactionRecord[], note: strin
 export interface AmountMatch {
   note: string;
   category?: string;
+  approximate?: boolean; // matched a nearby amount rather than the exact one
 }
 
-// The memo recorded most often with exactly this amount (ties go to the most recent), with the
-// category it was last used with, so typing "800" can offer "駐車場 · Car"
-export function getTopEntryForAmount(records: TransactionRecord[], amount: number): AmountMatch | null {
-  if (amount <= 0) return null;
-  const sameAmount = records.filter(r => r.amount === amount && r.note && !r.isDaily && !r.isSubscription);
-  const note = getFrequentValues(sameAmount, Infinity, r => r.note?.trim() || undefined)[0];
-  if (!note) return null;
-  const category = getLastCategoryForNote(sameAmount, note) ?? getLastCategoryForNote(records, note);
-  return category ? { note, category } : { note };
+// Fares and similar costs vary from day to day (a train ride can be ¥190 one day and ¥320 the
+// next, a shinkansen ticket a few hundred yen), so past records within this range also match:
+// ±10%, but at least ±¥150 so small fares still find each other
+const NEAR_TOLERANCE = 0.1;
+const NEAR_MIN_RANGE = 150;
+export const MAX_AMOUNT_MATCHES = 3;
+
+const isMemoRecord = (r: TransactionRecord) => !!r.note?.trim() && !r.isDaily && !r.isSubscription;
+
+// Memos recorded with this amount, most frequent first (ties go to the most recent), each with the
+// category it was last used with, so typing "800" can offer "駐車場 · Car". Memos used with the
+// exact amount come first, then ones used with nearby amounts, marked approximate.
+export function getTopEntriesForAmount(records: TransactionRecord[], amount: number, limit = MAX_AMOUNT_MATCHES): AmountMatch[] {
+  if (amount <= 0) return [];
+  const candidates = records.filter(isMemoRecord);
+  const range = Math.max(amount * NEAR_TOLERANCE, NEAR_MIN_RANGE);
+  const memos = (matches: TransactionRecord[]) => getFrequentValues(matches, Infinity, r => r.note?.trim() || undefined);
+  const exact = memos(candidates.filter(r => r.amount === amount));
+  const near = memos(candidates.filter(r => r.amount !== amount && Math.abs(r.amount - amount) <= range))
+    .filter(note => !exact.includes(note));
+  return [
+    ...exact.map(note => ({ note, approximate: false })),
+    ...near.map(note => ({ note, approximate: true })),
+  ]
+    .slice(0, limit)
+    .map(({ note, approximate }) => {
+      const category = getLastCategoryForNote(records, note);
+      return { note, ...(category ? { category } : {}), ...(approximate ? { approximate } : {}) };
+    });
 }

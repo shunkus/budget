@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
 import { getKeypadKeyHeight, saveKeypadKeyHeight } from '@/lib/storage';
-import { AMOUNT_WINDOW_DAYS, MAX_CATEGORY_LENGTH, MAX_NOTE_LENGTH, getFrequentCategories, getFrequentNotes, getFrequentValues, getLastCategoryForNote, getTopEntryForAmount } from '@/lib/suggestions';
+import { AMOUNT_WINDOW_DAYS, AmountMatch, MAX_CATEGORY_LENGTH, MAX_NOTE_LENGTH, getFrequentCategories, getFrequentNotes, getFrequentValues, getLastCategoryForNote, getTopEntriesForAmount } from '@/lib/suggestions';
 import { appendKey, backspace, evaluate, hasOperator } from '@/lib/calculator';
 
 const MAX_FREQUENT_AMOUNTS = 4;
@@ -62,8 +62,8 @@ export default function Keypad() {
     focusedField === 'note' ? matching(getFrequentNotes(allRecords), trimmedNote)
     : focusedField === 'category' ? matching(getFrequentCategories(allRecords), trimmedCategory)
     : [];
-  // Once an amount is typed, offer the memo most often recorded with that exact amount
-  const amountMatch = canSubmit && !trimmedNote ? getTopEntryForAmount(allRecords, amount) : null;
+  // Once an amount is typed, offer the memos most often recorded with that (or a nearby) amount
+  const amountMatches = canSubmit && !trimmedNote ? getTopEntriesForAmount(allRecords, amount) : [];
 
   const press = (key: string) => setExpression(prev => appendKey(prev, key));
 
@@ -148,10 +148,9 @@ export default function Keypad() {
     }
   };
 
-  const handleAmountMatch = () => {
-    if (!amountMatch) return;
-    setNote(amountMatch.note);
-    if (!isCategoryTouched) setCategory(amountMatch.category ?? '');
+  const handleAmountMatch = (match: AmountMatch) => {
+    setNote(match.note);
+    if (!isCategoryTouched) setCategory(match.category ?? '');
   };
 
   const handleTextSuggestion = (value: string) => {
@@ -254,19 +253,21 @@ export default function Keypad() {
             </button>
           ))}
         </div>
-      ) : (amountMatch || frequentAmounts.length > 0) && (
+      ) : (amountMatches.length > 0 || frequentAmounts.length > 0) && (
         <div className="flex gap-2 overflow-x-auto">
-          {amountMatch && (
+          {amountMatches.map(match => (
             <button
+              key={match.note}
               type="button"
-              onClick={handleAmountMatch}
-              aria-label={`Use memo ${amountMatch.note}`}
+              onClick={() => handleAmountMatch(match)}
+              aria-label={`Use memo ${match.note}`}
               className="shrink-0 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-sm text-blue-700 hover:bg-blue-100 active:scale-95 transition"
             >
-              {amountMatch.note}
-              {amountMatch.category && <span className="text-blue-400"> · {amountMatch.category}</span>}
+              {match.approximate && <span className="text-blue-400">≈ </span>}
+              {match.note}
+              {match.category && <span className="text-blue-400"> · {match.category}</span>}
             </button>
-          )}
+          ))}
           {frequentAmounts.map(value => (
             <button
               key={value}
