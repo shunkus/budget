@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useBudget } from '@/contexts/BudgetContext';
 import { getKeypadKeyHeight, saveKeypadKeyHeight } from '@/lib/storage';
-import { AMOUNT_WINDOW_DAYS, MAX_CATEGORY_LENGTH, MAX_NOTE_LENGTH, getFrequentCategories, getFrequentNotes, getFrequentValues, getLastCategoryForNote } from '@/lib/suggestions';
+import { AMOUNT_WINDOW_DAYS, MAX_CATEGORY_LENGTH, MAX_NOTE_LENGTH, getFrequentCategories, getFrequentNotes, getFrequentValues, getLastCategoryForNote, getTopEntryForAmount } from '@/lib/suggestions';
 import { appendKey, backspace, evaluate, hasOperator } from '@/lib/calculator';
 
 const MAX_FREQUENT_AMOUNTS = 4;
@@ -62,6 +62,8 @@ export default function Keypad() {
     focusedField === 'note' ? matching(getFrequentNotes(allRecords), trimmedNote)
     : focusedField === 'category' ? matching(getFrequentCategories(allRecords), trimmedCategory)
     : [];
+  // Once an amount is typed, offer the memo most often recorded with that exact amount
+  const amountMatch = canSubmit && !trimmedNote ? getTopEntryForAmount(allRecords, amount) : null;
 
   const press = (key: string) => setExpression(prev => appendKey(prev, key));
 
@@ -144,6 +146,12 @@ export default function Keypad() {
       e.preventDefault();
       commitKeyHeight(measureKeyHeight() + (e.key === 'ArrowUp' ? 2 : -2));
     }
+  };
+
+  const handleAmountMatch = () => {
+    if (!amountMatch) return;
+    setNote(amountMatch.note);
+    if (!isCategoryTouched) setCategory(amountMatch.category ?? '');
   };
 
   const handleTextSuggestion = (value: string) => {
@@ -246,8 +254,19 @@ export default function Keypad() {
             </button>
           ))}
         </div>
-      ) : frequentAmounts.length > 0 && (
+      ) : (amountMatch || frequentAmounts.length > 0) && (
         <div className="flex gap-2 overflow-x-auto">
+          {amountMatch && (
+            <button
+              type="button"
+              onClick={handleAmountMatch}
+              aria-label={`Use memo ${amountMatch.note}`}
+              className="shrink-0 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-sm text-blue-700 hover:bg-blue-100 active:scale-95 transition"
+            >
+              {amountMatch.note}
+              {amountMatch.category && <span className="text-blue-400"> · {amountMatch.category}</span>}
+            </button>
+          )}
           {frequentAmounts.map(value => (
             <button
               key={value}

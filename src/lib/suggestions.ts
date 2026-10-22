@@ -47,3 +47,19 @@ export function getLastCategoryForNote(records: TransactionRecord[], note: strin
   }
   return latest?.category ?? null;
 }
+
+export interface AmountMatch {
+  note: string;
+  category?: string;
+}
+
+// The memo recorded most often with exactly this amount (ties go to the most recent), with the
+// category it was last used with, so typing "800" can offer "駐車場 · Car"
+export function getTopEntryForAmount(records: TransactionRecord[], amount: number): AmountMatch | null {
+  if (amount <= 0) return null;
+  const sameAmount = records.filter(r => r.amount === amount && r.note && !r.isDaily && !r.isSubscription);
+  const note = getFrequentValues(sameAmount, Infinity, r => r.note?.trim() || undefined)[0];
+  if (!note) return null;
+  const category = getLastCategoryForNote(sameAmount, note) ?? getLastCategoryForNote(records, note);
+  return category ? { note, category } : { note };
+}
