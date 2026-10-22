@@ -12,8 +12,8 @@ const HEADERS = ['ID', 'Date', 'Time', 'Type', 'Amount', 'Memo', 'Category'];
 // Tabs and line breaks would break the TSV layout
 const clean = (value: string | undefined) => (value ?? '').replace(/[\t\r\n]+/g, ' ').trim();
 
-const formatTime = (timestamp: number) =>
-  new Date(timestamp).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' });
+// HH:MM in JST, formatted by hand: Intl output differs between engines (Hermes drops the leading zero)
+const formatTime = (timestamp: number) => new Date(timestamp + 9 * 60 * 60 * 1000).toISOString().slice(11, 16);
 
 function typeLabel(record: TsvRecord): string {
   if (record.isDaily) return 'daily';
